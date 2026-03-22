@@ -68,6 +68,21 @@ impl SynthRuntime {
     }
 }
 
+#[cfg(test)]
+pub(crate) fn test_runtime<S>(synthesizer: S) -> SynthRuntime
+where
+    S: Synthesizer + 'static,
+{
+    SynthRuntime {
+        synthesizer: Arc::new(synthesizer),
+        engine_name: "kitten_tts_rs".to_string(),
+        engine_version: None,
+        model_loaded: true,
+        onnx_runtime_source: None,
+        onnx_runtime_path: None,
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct UnavailableSynthesizer {
     reason: String,
@@ -158,6 +173,8 @@ type RuntimeOnnxPathFn = fn(&SynthRuntime) -> Option<&PathBuf>;
 type UnavailableListVoicesFn = fn(&UnavailableSynthesizer) -> Vec<String>;
 type UnavailableSynthesizeFn =
     fn(&UnavailableSynthesizer, &InternalSynthesisRequest) -> Result<SynthResult, AppError>;
+#[cfg(test)]
+type TestRuntimeFn = fn(UnavailableSynthesizer) -> SynthRuntime;
 
 const _: Option<FloatAudioBuffer> = None;
 const _: Option<SynthResult> = None;
@@ -174,6 +191,8 @@ const _: RuntimeOnnxSourceFn = SynthRuntime::onnx_runtime_source;
 const _: RuntimeOnnxPathFn = SynthRuntime::onnx_runtime_path;
 const _: UnavailableListVoicesFn = <UnavailableSynthesizer as Synthesizer>::list_voices;
 const _: UnavailableSynthesizeFn = <UnavailableSynthesizer as Synthesizer>::synthesize;
+#[cfg(test)]
+const _: TestRuntimeFn = test_runtime::<UnavailableSynthesizer>;
 
 #[cfg(test)]
 mod tests {

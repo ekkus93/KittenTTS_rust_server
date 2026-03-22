@@ -290,82 +290,82 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 ## Phase 5 - Port audio pipeline
 
 ### 5.1 Port float waveform -> PCM conversion
-- [ ] Accept mono float waveform
-- [ ] Validate expected shape
-- [ ] Clip to `[-1.0, 1.0]`
-- [ ] Convert to signed 16-bit PCM
-- [ ] Preserve 24 kHz mono as the backend-native format
+- [x] Accept mono float waveform
+- [x] Validate expected shape
+- [x] Clip to `[-1.0, 1.0]`
+- [x] Convert to signed 16-bit PCM
+- [x] Preserve 24 kHz mono as the backend-native format
 
 ### 5.2 Port audio normalization
-- [ ] Port mono -> stereo duplication
-- [ ] Port stereo -> mono averaging if needed
-- [ ] Port linear resampling logic
-- [ ] Validate sample-rate and channel arguments
-- [ ] Preserve behavior as close to Python `app/audio.py` as practical
+- [x] Port mono -> stereo duplication
+- [x] Port stereo -> mono averaging if needed
+- [x] Port linear resampling logic
+- [x] Validate sample-rate and channel arguments
+- [x] Preserve behavior as close to Python `app/audio.py` as practical
 
 ### 5.3 Port audio serialization
-- [ ] Implement WAV serialization
-- [ ] Implement raw PCM passthrough
-- [ ] Keep serialization separate from routes
+- [x] Implement WAV serialization
+- [x] Implement raw PCM passthrough
+- [x] Keep serialization separate from routes
 
 ### 5.4 Add audio tests
-- [ ] Test float clipping
-- [ ] Test PCM conversion
-- [ ] Test mono -> stereo conversion
-- [ ] Test stereo -> mono conversion
-- [ ] Test linear resampling
-- [ ] Test WAV bytes are valid and parseable
-- [ ] Test PCM passthrough length
+- [x] Test float clipping
+- [x] Test PCM conversion
+- [x] Test mono -> stereo conversion
+- [x] Test stereo -> mono conversion
+- [x] Test linear resampling
+- [x] Test WAV bytes are valid and parseable
+- [x] Test PCM passthrough length
 
 ### 5.5 Acceptance for Phase 5
-- [ ] Rust service can produce valid audio bytes from backend output
-- [ ] WAV responses are playable
-- [ ] PCM responses are correct for OpenAI-compatible route
+- [x] Rust service can produce valid audio bytes from backend output
+- [x] WAV responses are playable
+- [x] PCM responses are correct for OpenAI-compatible route
 
 ---
 
 ## Phase 6 - Port auth and middleware
 
 ### 6.1 Port API-key extraction logic
-- [ ] Extract `xi-api-key`
-- [ ] Extract `Authorization: Bearer ...`
-- [ ] Detect conflicting values when both headers are present
-- [ ] Return the effective API key when they agree
+- [x] Extract `xi-api-key`
+- [x] Extract `Authorization: Bearer ...`
+- [x] Detect conflicting values when both headers are present
+- [x] Return the effective API key when they agree
 
 ### 6.2 Port route auth policy
-- [ ] Keep `/healthz` public
-- [ ] Protect `/v1...` routes
-- [ ] Respect `auth_enabled`
-- [ ] Respect configured local API key
+- [x] Keep `/healthz` public
+- [x] Protect `/v1...` routes
+- [x] Respect `auth_enabled`
+- [x] Respect configured local API key
 
 ### 6.3 Port request context middleware
-- [ ] Generate request IDs
-- [ ] Track selected voice in request extensions/state
-- [ ] Track text length in request extensions/state
-- [ ] Measure latency
-- [ ] Attach `X-Request-Id` to all responses
+- [x] Generate request IDs
+- [x] Track selected voice in request extensions/state
+- [x] Track text length in request extensions/state
+- [x] Measure latency
+- [x] Attach `X-Request-Id` to all responses
 
 ### 6.4 Port request logging behavior
-- [ ] Log method
-- [ ] Log path
-- [ ] Log status code
-- [ ] Log latency
-- [ ] Log selected voice if available
-- [ ] Log text length if available
-- [ ] Log app error code if available
+- [x] Log method
+- [x] Log path
+- [x] Log status code
+- [x] Log latency
+- [x] Log selected voice if available
+- [x] Log text length if available
+- [x] Log app error code if available
 
 ### 6.5 Add auth/middleware tests
-- [ ] Test public path access
-- [ ] Test protected path with auth disabled
-- [ ] Test protected path with missing auth when enabled
-- [ ] Test `xi-api-key` success
-- [ ] Test bearer token success
-- [ ] Test conflicting header failure
-- [ ] Test `X-Request-Id` header present
+- [x] Test public path access
+- [x] Test protected path with auth disabled
+- [x] Test protected path with missing auth when enabled
+- [x] Test `xi-api-key` success
+- [x] Test bearer token success
+- [x] Test conflicting header failure
+- [x] Test `X-Request-Id` header present
 
 ### 6.6 Acceptance for Phase 6
-- [ ] Auth behavior matches Python server expectations
-- [ ] Request ID and logging metadata are wired up
+- [x] Auth behavior matches Python server expectations
+- [x] Request ID and logging metadata are wired up
 
 ---
 
@@ -382,72 +382,72 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 - [x] Return channel layout
 
 ### 7.2 Implement `/v1/voices`
-- [ ] Query backend voices
-- [ ] Build descriptors
-- [ ] Return stable JSON shape
+- [x] Query backend voices
+- [x] Build descriptors
+- [x] Return stable JSON shape
 
 ### 7.3 Implement `POST /v1/text-to-speech`
-- [ ] Parse ElevenLabs-like request
-- [ ] Normalize into `InternalSynthesisRequest`
-- [ ] Use default voice if none specified
-- [ ] Synthesize
-- [ ] Normalize audio
-- [ ] Serialize WAV
-- [ ] Set `X-Output-Format`
+- [x] Parse ElevenLabs-like request
+- [x] Normalize into `InternalSynthesisRequest`
+- [x] Use default voice if none specified
+- [x] Synthesize
+- [x] Normalize audio
+- [x] Serialize WAV
+- [x] Set `X-Output-Format`
 
 ### 7.4 Implement `POST /v1/text-to-speech/{voice_id}`
-- [ ] Parse request
-- [ ] Normalize into internal request with explicit voice
-- [ ] Resolve voice
-- [ ] Synthesize
-- [ ] Normalize audio
-- [ ] Serialize response
-- [ ] Set response headers
+- [x] Parse request
+- [x] Normalize into internal request with explicit voice
+- [x] Resolve voice
+- [x] Synthesize
+- [x] Normalize audio
+- [x] Serialize response
+- [x] Set response headers
 
 ### 7.5 Implement `POST /v1/text-to-speech/{voice_id}/stream`
-- [ ] Preserve current pseudo-stream behavior
-- [ ] Do **not** attempt incremental synthesis in v1
-- [ ] Synthesize entire audio first
+- [x] Preserve current pseudo-stream behavior
+- [x] Do **not** attempt incremental synthesis in v1
+- [x] Synthesize entire audio first
 - [ ] Chunk already-generated bytes into the response body
-- [ ] Preserve output-format negotiation behavior closely
+- [x] Preserve output-format negotiation behavior closely
 
 ### 7.6 Implement `POST /v1/audio/speech`
-- [ ] Parse OpenAI-compatible request
-- [ ] Normalize into internal request
-- [ ] Support `wav`
-- [ ] Support `pcm`
-- [ ] Use OpenAI-style errors for this route
-- [ ] Set response headers appropriately
+- [x] Parse OpenAI-compatible request
+- [x] Normalize into internal request
+- [x] Support `wav`
+- [x] Support `pcm`
+- [x] Use OpenAI-style errors for this route
+- [x] Set response headers appropriately
 
 ### 7.7 Port output-format negotiation
-- [ ] Port normal output-format negotiation behavior
-- [ ] Port stream-route format negotiation behavior
-- [ ] Preserve strict-mode handling for unsupported formats
-- [ ] Preserve fallback behavior when strict mode is off
+- [x] Port normal output-format negotiation behavior
+- [x] Port stream-route format negotiation behavior
+- [x] Preserve strict-mode handling for unsupported formats
+- [x] Preserve fallback behavior when strict mode is off
 
 ### 7.8 Port exception/error handling
-- [ ] Map internal app errors to local JSON envelope
-- [ ] Map OpenAI route errors to OpenAI envelope
-- [ ] Map validation failures
-- [ ] Map unexpected failures
+- [x] Map internal app errors to local JSON envelope
+- [x] Map OpenAI route errors to OpenAI envelope
+- [x] Map validation failures
+- [x] Map unexpected failures
 
 ### 7.9 Add route tests
 - [x] Test `/healthz`
-- [ ] Test `/v1/voices`
-- [ ] Test `/v1/text-to-speech` success
-- [ ] Test `/v1/text-to-speech/{voice_id}` success
-- [ ] Test `/v1/text-to-speech/{voice_id}` unknown voice behavior
-- [ ] Test empty text returns 400
-- [ ] Test `/v1/audio/speech` WAV success
-- [ ] Test `/v1/audio/speech` PCM success
-- [ ] Test `/v1/audio/speech` validation failure shape
-- [ ] Test strict-mode unsupported output format
+- [x] Test `/v1/voices`
+- [x] Test `/v1/text-to-speech` success
+- [x] Test `/v1/text-to-speech/{voice_id}` success
+- [x] Test `/v1/text-to-speech/{voice_id}` unknown voice behavior
+- [x] Test empty text returns 400
+- [x] Test `/v1/audio/speech` WAV success
+- [x] Test `/v1/audio/speech` PCM success
+- [x] Test `/v1/audio/speech` validation failure shape
+- [x] Test strict-mode unsupported output format
 - [ ] Test stream route returns chunked body
-- [ ] Test `X-Output-Format`
-- [ ] Test `X-Request-Id`
+- [x] Test `X-Output-Format`
+- [x] Test `X-Request-Id`
 
 ### 7.10 Acceptance for Phase 7
-- [ ] All public routes exist
+- [x] All public routes exist
 - [ ] Routes behave compatibly enough to replace the Python server for current clients
 
 ---
@@ -605,15 +605,15 @@ The port is done when all of the following are true:
 
 - [x] Rust server starts successfully with valid config
 - [x] `/healthz` works
-- [ ] `/v1/voices` works
-- [ ] `/v1/text-to-speech` works
-- [ ] `/v1/text-to-speech/{voice_id}` works
+- [x] `/v1/voices` works
+- [x] `/v1/text-to-speech` works
+- [x] `/v1/text-to-speech/{voice_id}` works
 - [ ] `/v1/text-to-speech/{voice_id}/stream` works as pseudo-streaming
-- [ ] `/v1/audio/speech` works with both WAV and PCM
-- [ ] Auth behavior matches current expectations
-- [ ] Error envelopes match current route compatibility expectations
-- [ ] Voice alias resolution matches current expectations
-- [ ] Audio output is valid and playable
+- [x] `/v1/audio/speech` works with both WAV and PCM
+- [x] Auth behavior matches current expectations
+- [x] Error envelopes match current route compatibility expectations
+- [x] Voice alias resolution matches current expectations
+- [x] Audio output is valid and playable
 - [ ] `espeak-ng` is handled correctly in runtime packaging
 - [ ] Docker deployment works
 - [ ] systemd deployment works

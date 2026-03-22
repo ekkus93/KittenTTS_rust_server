@@ -127,3 +127,33 @@
 - Ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features` in `KittenTTS_rust_server`.
 - Also ran the ignored real-backend synthesis test with `ORT_DYLIB_PATH` pointed at `~/.local/share/onnxruntime/1.24.2/libonnxruntime.so.1.24.2` and `KITTENTTS_SERVER_TEST_MODEL_DIR` pointed at the cached `KittenML/kitten-tts-nano-0.8` snapshot.
 - Results were clean: 26 regular unit tests passed with 1 ignored in the all-features pass, 10 config integration tests passed, 1 health integration test passed, and the ignored real-backend synthesis test passed separately on this host.
+
+## 2026-03-22T19:12:57Z - GPT-5.4 - Phase 5 audio service implemented and validated
+- Implemented `src/services/audio.rs` with backend float-to-PCM conversion, channel normalization, linear resampling, WAV serialization, and raw PCM passthrough.
+- Added unit coverage for clipping, PCM conversion, mono/stereo conversion, linear resampling, WAV container validity, and PCM passthrough length.
+- Revalidated with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`; the Rust server test suite now reports 34 passing unit tests, 10 passing config integration tests, 1 passing health integration test, and 1 ignored real-backend synthesis test.
+
+## 2026-03-22T19:22:47Z - GPT-5.4 - Non-stream TTS routes now use the Rust audio pipeline
+- Implemented `src/routes/tts.rs` for `POST /v1/text-to-speech`, `POST /v1/text-to-speech/{voice_id}`, and `POST /v1/audio/speech`, wiring request normalization, voice resolution, backend synthesis, audio normalization, WAV/PCM serialization, and response headers through the Phase 5 audio service.
+- Moved OpenAI request deserialization into the route handler so invalid `/v1/audio/speech` requests return the project’s OpenAI-style error envelope instead of Axum’s plain-text extractor error.
+- Added route-level tests for ElevenLabs-style success paths, unknown-voice fallback, empty-text rejection, OpenAI WAV/PCM success, OpenAI validation-envelope shape, strict-mode unsupported output-format rejection, and `X-Output-Format`; `cargo test` now passes with 32 unit tests, 10 config integration tests, and 1 health integration test.
+
+## 2026-03-22T19:27:45Z - GPT-5.4 - Voices route implemented with descriptor-service parity
+- Implemented `src/routes/voices.rs` for `GET /v1/voices`, reusing `build_voice_descriptors` so the handler stays aligned with the Python compatibility shape and existing voice metadata rules.
+- Added route-level coverage that exercises the full router and verifies descriptor ordering plus alias metadata in the JSON response.
+- Revalidated with `cargo fmt` and `cargo test`; the Rust server suite now passes with 33 unit tests, 10 config integration tests, and 1 health integration test.
+
+## 2026-03-22T19:35:39Z - GPT-5.4 - Stream TTS route added with format negotiation parity
+- Implemented `POST /v1/text-to-speech/{voice_id}/stream` in `src/routes/tts.rs`, reusing the existing synthesis and audio-normalization pipeline while setting `streaming=true` on the internal request and supporting Python-style `wav`, `wav_<sample_rate>`, `pcm`, and `pcm_<sample_rate>` negotiation.
+- Added route-level tests for stream-route WAV and PCM responses plus strict-mode rejection of unsupported stream output formats; `cargo test` now passes with 36 unit tests, 10 config integration tests, and 1 health integration test.
+- The route intentionally avoids true incremental synthesis and still generates the full audio payload first; the TODO remains explicit that chunked response-body semantics are not yet implemented under the current dependency surface.
+
+## 2026-03-22T19:41:38Z - GPT-5.4 - Auth and request-context middleware wired into the router
+- Implemented `src/middleware/auth.rs` with Python-matching API-key extraction, conflicting-header detection, `/healthz` public-path handling, `/v1...` protection, and OpenAI-vs-local authentication error envelopes.
+- Implemented `src/middleware/request_context.rs` with per-request UUIDs, shared request metadata for selected voice/text length/error code, `X-Request-Id` response headers, local-error request-id injection, and structured request completion logs.
+- Wired both middleware layers into `build_router`, updated the TTS routes to publish voice/text metadata into the request context, and added integration coverage for public access, auth-disabled pass-through, missing auth, `xi-api-key`, bearer auth, conflicting headers, OpenAI auth error shape, and `X-Request-Id`; `cargo test` now passes with 39 unit tests, 10 config integration tests, and 8 integration tests in `tests/health.rs`.
+
+## 2026-03-22T19:44:01Z - GPT-5.4 - Full Rust validation plus ignored real-backend test passed
+- Ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features` in `KittenTTS_rust_server`; all checks passed after a minimal rustfmt line-wrap fix in `tests/health.rs`.
+- Standard all-features test results were clean: 49 passed, 0 failed, 1 ignored in `src/lib.rs`, plus 10 passing tests in `tests/config.rs` and 8 passing tests in `tests/health.rs`.
+- Also ran the ignored real-backend synthesis test `create_synth_runtime_can_generate_speech_with_real_model_assets` with `ORT_DYLIB_PATH` set to the local ONNX Runtime shared library and `KITTENTTS_SERVER_TEST_MODEL_DIR` pointed at the cached `KittenML/kitten-tts-nano-0.8` snapshot; it passed locally.

@@ -1,7 +1,7 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use thiserror::Error;
@@ -47,12 +47,12 @@ pub struct AppError {
     pub details: BTreeMap<String, Value>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct LocalErrorEnvelope {
     pub error: LocalErrorBody,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct LocalErrorBody {
     pub code: String,
     pub message: String,
@@ -61,12 +61,12 @@ pub struct LocalErrorBody {
     pub request_id: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct OpenAiErrorEnvelope {
     pub error: OpenAiErrorBody,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct OpenAiErrorBody {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
