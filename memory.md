@@ -62,3 +62,8 @@
 - Committed and pushed the Rust server repo changes as `010fd84 feat: add phase 4 backend foundation` on `origin/master`.
 - The pushed server repo now includes the Phase 4 backend foundation in `Cargo.toml`, `src/services/synth.rs`, `src/backend/kitten.rs`, `src/error.rs`, and the synced Phase 4 TODO updates.
 - The sibling backend repo `kitten_tts_rs` still has local unpublished compatibility changes in `src/model.rs` and `src/voices.rs`; they were not included in the Rust server push because they are a separate git repository.
+
+## 2026-03-22T06:31:31Z - GPT-5.4 - Backend fork restored and pushed
+- Reapplied the lost `kitten_tts_rs` compatibility changes after the repo path was replaced with a fresh fork clone, restoring the Python-compatible style-row helper/tests in `src/model.rs` and the backend voice-resolution tests in `src/voices.rs`.
+- Pushed the restored backend work to the writable fork as `6495a86 fix: restore backend compatibility helpers` on `origin/main`.
+- Validation for the backend fork: `cargo fmt --check` and `cargo check --all-features` passed; full `cargo test` remains blocked in this Linux environment by the same ONNX Runtime linker errors for missing glibc C23 symbols such as `__isoc23_strtol[l|ll|ull]`.
