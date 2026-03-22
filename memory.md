@@ -225,3 +225,8 @@
 - Re-ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features` in `KittenTTS_rust_server`.
 - Results were clean: unit tests `52 passed, 0 failed, 1 ignored`; config integration tests `13 passed, 0 failed, 1 ignored`; health integration tests `8 passed, 0 failed`; doc tests `0 failed`.
 - The ignored tests remain the host-dependent real-backend synthesis and valid-config startup checks that require `KITTENTTS_SERVER_TEST_MODEL_DIR` plus a compatible runtime environment.
+
+## 2026-03-22T21:57:37Z - GPT-5.4 - Deployment parity work checked in on master
+- Created commit `165892e` (`feat: complete deployment parity and validation`) with the Rust-server deployment artifacts, compatibility test coverage, README/TODO updates, and the clean validation state.
+- Commit `165892e` was created at `2026-03-22T14:57:26-07:00` according to `git log -1 --format="%aI" 165892e`.
+- This interaction also included the requested check-in flow to prepare `master` for pushing to GitHub.
