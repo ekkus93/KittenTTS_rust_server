@@ -73,8 +73,8 @@ not from the format string. Pass it as a separate argument at construction time,
 so `negotiate_stream_format` returns a `(container, sample_rate, media_type, header_value)`
 tuple and the caller composes the final value. Either approach removes the placeholder.
 
-- [ ] Remove `channels` field from `StreamFormat` or change it to `Option<u16>`
-- [ ] Ensure `channels: 0` can no longer reach the audio pipeline
+- [x] Remove `channels` field from `StreamFormat` or change it to `Option<u16>`
+- [x] Ensure `channels: 0` can no longer reach the audio pipeline
 
 ---
 
@@ -91,8 +91,8 @@ may be inconsistent and there is no record of the anomaly.
 Log `warn!` with the request ID when `lock()` returns `Err`. The recovery-and-continue
 behavior is fine; the silence is the issue.
 
-- [ ] Add `warn!` log on poisoned mutex in `with_context`
-- [ ] Include the request ID in the warning where available
+- [x] Add `warn!` log on poisoned mutex in `with_context`
+- [x] Include the request ID in the warning where available
 
 ---
 
@@ -109,7 +109,7 @@ audio without any diagnostic signal.
 **Fix:**  
 Replace `_ => 1` with `_ => unreachable!("channel_layout validated at config load time")`.
 
-- [ ] Replace silent wildcard with `unreachable!()` in `output_channels`
+- [x] Replace silent wildcard with `unreachable!()` in `output_channels`
 
 ---
 

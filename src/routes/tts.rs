@@ -29,7 +29,6 @@ struct StreamFormat {
     header_value: String,
     media_type: &'static str,
     sample_rate: u32,
-    channels: u16,
 }
 
 pub(crate) fn routes() -> Router<AppState> {
@@ -131,14 +130,13 @@ fn build_streaming_tts_response(
     let stream_format = negotiate_stream_format(
         internal_request.output_format.as_deref(),
         state.settings.sample_rate,
-        state.settings.output_channels(),
         state.settings.strict_mode,
     )?;
     let source_audio = synthesize_audio(&internal_request, &state, request_context)?;
     let normalized_audio = normalize_audio(
         &source_audio,
         stream_format.sample_rate,
-        stream_format.channels,
+        state.settings.output_channels(),
     )?;
 
     // Compatibility note: v1 keeps the Python shim's pseudo-streaming contract.
@@ -241,7 +239,6 @@ fn normalize_output_format(output_format: Option<&str>) -> Option<String> {
 fn negotiate_stream_format(
     requested_output_format: Option<&str>,
     settings_sample_rate: u32,
-    settings_channels: u16,
     strict_mode: bool,
 ) -> Result<StreamFormat, AppError> {
     let normalized_output_format = normalize_output_format(requested_output_format);
@@ -251,15 +248,11 @@ fn negotiate_stream_format(
             header_value: "wav".to_string(),
             media_type: "audio/wav",
             sample_rate: settings_sample_rate,
-            channels: settings_channels,
         });
     };
 
     if let Some(stream_format) = supported_stream_format(&output_format, settings_sample_rate) {
-        return Ok(StreamFormat {
-            channels: settings_channels,
-            ..stream_format
-        });
+        return Ok(stream_format);
     }
 
     if strict_mode {
@@ -273,7 +266,6 @@ fn negotiate_stream_format(
         header_value: "wav".to_string(),
         media_type: "audio/wav",
         sample_rate: settings_sample_rate,
-        channels: settings_channels,
     })
 }
 
@@ -315,7 +307,6 @@ fn supported_stream_format(output_format: &str, settings_sample_rate: u32) -> Op
         header_value,
         media_type,
         sample_rate,
-        channels: 0,
     })
 }
 

@@ -263,3 +263,11 @@
 - All 75 tests pass (54 unit + 14 config + 8 health); 2 ignored; cargo clippy -D warnings clean.
 - Commit created at `2026-03-22T15:55:45-07:00`; pushed to `origin/master`.
 - Tier 1 checkboxes marked complete in `docs/CODE_REVIEW_TODO1.md`.
+
+## 2026-03-22T23:04:57Z - Claude Sonnet 4.6 - Tier 2 code-review fixes implemented and pushed
+- Implemented all three Tier 2 items from `docs/CODE_REVIEW_TODO1.md`.
+- **2.1 StreamFormat channels removal** (`src/routes/tts.rs`): Removed `channels: u16` field from `StreamFormat` struct; removed `settings_channels: u16` parameter from `negotiate_stream_format`; removed `channels: 0` placeholder from `supported_stream_format`; replaced struct-update `StreamFormat { channels: settings_channels, ..stream_format }` with plain `stream_format`; `build_streaming_tts_response` now calls `state.settings.output_channels()` directly in `normalize_audio`.
+- **2.2 Warn on poisoned mutex** (`src/middleware/request_context.rs`): `with_context` `Err(poisoned)` branch now logs `warn!(request_id = %recovered.request_id, "request context mutex was poisoned; recovering")` before returning the recovered guard.
+- **2.3 unreachable!() channel layout** (`src/config.rs`): `output_channels()` `_ => 1` wildcard replaced with `_ => unreachable!("channel_layout validated at config load time")`.
+- All 75 tests pass (54 unit + 14 config + 8 health); 2 ignored; cargo clippy -D warnings clean.
+- Tier 2 checkboxes marked complete in `docs/CODE_REVIEW_TODO1.md`.

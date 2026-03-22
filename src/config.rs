@@ -52,7 +52,7 @@ impl Settings {
         match self.channel_layout.as_str() {
             "mono" => 1,
             "stereo" => 2,
-            _ => 1,
+            _ => unreachable!("channel_layout validated at config load time"),
         }
     }
 

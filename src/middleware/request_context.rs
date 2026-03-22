@@ -87,7 +87,14 @@ fn with_context<T>(
 ) -> T {
     let mut guard = match context.lock() {
         Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
+        Err(poisoned) => {
+            let recovered = poisoned.into_inner();
+            warn!(
+                request_id = %recovered.request_id,
+                "request context mutex was poisoned; recovering"
+            );
+            recovered
+        }
     };
 
     callback(&mut guard)
