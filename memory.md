@@ -16,3 +16,13 @@
 ## 2026-03-22T05:04:40Z - GPT-5.4 - Current Rust repo work prepared for check-in
 - The repo now contains the Phase 0 server scaffold, Rust workspace instructions, port planning docs, synchronized TODO checklist, and a clean validation run (`cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`).
 - Current branch is `master`, with the local work ready to be committed and pushed to `origin/master` as one batch.
+
+## 2026-03-22T05:12:44Z - GPT-5.4 - Phase 1 config work completed
+- Completed the Rust config/settings phase: Python-matching field set, JSON config loading, env override parsing, config-over-env precedence matching the Python server, validation for port/sample rate/channel layout/log level/output format, and Python-style log-level mapping for tracing startup.
+- Added `tests/config.rs` with coverage for defaults, config loading, env overrides, precedence, invalid boolean/int/JSON map parsing, and invalid channel-layout/log-level validation.
+- Revalidated with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test`, plus live boot checks for config-file startup, env-override startup, and invalid-config startup failure.
+
+## 2026-03-22T05:13:52Z - GPT-5.4 - Lint and test run clean after Phase 1
+- Ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test` against the current Rust repo state.
+- All validation commands passed successfully with no lint failures and no test failures.
+- Current automated test inventory is 10 passing integration tests total: 9 in `tests/config.rs` and 1 in `tests/health.rs`.

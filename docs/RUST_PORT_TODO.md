@@ -99,11 +99,11 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 ### 1.2 Implement config file loading
 - [x] Load settings from JSON config file
 - [x] Validate that config root is an object
-- [ ] Produce clear errors for:
+- [x] Produce clear errors for:
   - [x] missing file
   - [x] invalid JSON
   - [x] invalid field types
-  - [ ] invalid enum-like field values
+  - [x] invalid enum-like field values
 
 ### 1.3 Implement environment overrides
 - [x] Mirror the Python env prefix behavior
@@ -111,29 +111,29 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 - [x] Parse integer overrides
 - [x] Parse boolean overrides
 - [x] Parse JSON object override for `VOICE_MAP`
-- [ ] Merge config file + environment overrides with the same effective precedence as Python
+- [x] Merge config file + environment overrides with the same effective precedence as Python
 
 ### 1.4 Validate settings values
-- [ ] Validate `port`
+- [x] Validate `port`
 - [x] Validate `sample_rate`
 - [x] Validate `channel_layout` is `mono` or `stereo`
 - [x] Validate `log_level`
-- [ ] Validate `output_format` handling assumptions for current v1 support
+- [x] Validate `output_format` handling assumptions for current v1 support
 
 ### 1.5 Add config tests
-- [ ] Test defaults
-- [ ] Test config file loading
-- [ ] Test environment overrides
-- [ ] Test invalid boolean parsing
-- [ ] Test invalid integer parsing
-- [ ] Test invalid JSON map parsing
-- [ ] Test invalid `channel_layout`
-- [ ] Test invalid `log_level`
+- [x] Test defaults
+- [x] Test config file loading
+- [x] Test environment overrides
+- [x] Test invalid boolean parsing
+- [x] Test invalid integer parsing
+- [x] Test invalid JSON map parsing
+- [x] Test invalid `channel_layout`
+- [x] Test invalid `log_level`
 
 ### 1.6 Acceptance for Phase 1
-- [ ] Server can boot from config file
-- [ ] Server can boot from env overrides
-- [ ] Invalid config fails clearly
+- [x] Server can boot from config file
+- [x] Server can boot from env overrides
+- [x] Invalid config fails clearly
 
 ---
 

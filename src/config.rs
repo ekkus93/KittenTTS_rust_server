@@ -54,16 +54,30 @@ impl Settings {
         }
     }
 
-    pub fn validate(self) -> Result<Self, AppError> {
+    pub fn validate(mut self) -> Result<Self, AppError> {
+        self.output_format = self.output_format.to_ascii_lowercase();
+        self.channel_layout = self.channel_layout.to_ascii_lowercase();
+        self.log_level = self.log_level.to_ascii_uppercase();
+
         if self.auth_enabled && self.local_api_key.as_deref().unwrap_or_default().is_empty() {
             return Err(AppError::invalid_config(
                 "local_api_key must be set when auth_enabled is true",
             ));
         }
 
+        if self.port == 0 {
+            return Err(AppError::invalid_config("port must be between 1 and 65535"));
+        }
+
         if self.sample_rate == 0 {
             return Err(AppError::invalid_config(
                 "sample_rate must be a positive integer",
+            ));
+        }
+
+        if self.output_format != "wav" {
+            return Err(AppError::invalid_config(
+                "only wav output is supported in v1",
             ));
         }
 
@@ -75,10 +89,10 @@ impl Settings {
 
         if !matches!(
             self.log_level.as_str(),
-            "TRACE" | "DEBUG" | "INFO" | "WARN" | "ERROR"
+            "CRITICAL" | "ERROR" | "WARNING" | "INFO" | "DEBUG"
         ) {
             return Err(AppError::invalid_config(
-                "log_level must be one of TRACE, DEBUG, INFO, WARN, ERROR",
+                "log_level must be one of CRITICAL, ERROR, WARNING, INFO, DEBUG",
             ));
         }
 
@@ -88,18 +102,34 @@ impl Settings {
 
 pub fn load_settings(config_path: Option<PathBuf>) -> Result<Settings, AppError> {
     let config_path = selected_config_path(config_path);
-    let mut merged = match config_path {
-        Some(path) => load_json_config(&path)?,
-        None => Map::new(),
-    };
+    let mut merged = default_config_values()?;
 
     for (key, value) in environment_overrides()? {
         merged.insert(key, value);
     }
 
+    if let Some(path) = config_path {
+        for (key, value) in load_json_config(&path)? {
+            merged.insert(key, value);
+        }
+    }
+
     serde_json::from_value::<Settings>(Value::Object(merged))
         .map_err(|err| AppError::invalid_config(format!("invalid configuration: {err}")))?
         .validate()
+}
+
+fn default_config_values() -> Result<Map<String, Value>, AppError> {
+    let value = serde_json::to_value(Settings::default()).map_err(|err| {
+        AppError::internal(format!("failed to serialize default settings: {err}"))
+    })?;
+
+    match value {
+        Value::Object(map) => Ok(map),
+        _ => Err(AppError::internal(
+            "default settings must serialize to a JSON object",
+        )),
+    }
 }
 
 fn selected_config_path(config_path: Option<PathBuf>) -> Option<PathBuf> {
@@ -151,17 +181,13 @@ fn environment_overrides() -> Result<Map<String, Value>, AppError> {
     insert_u64(&mut overrides, "SAMPLE_RATE", "sample_rate")?;
 
     if let Some(voice_map) = env_value("VOICE_MAP") {
-        let value: Value = serde_json::from_str(&voice_map).map_err(|err| {
-            AppError::invalid_config(format!(
-                "{ENV_PREFIX}VOICE_MAP must contain valid JSON: {err}"
-            ))
-        })?;
-        if !value.is_object() {
-            return Err(AppError::invalid_config(
-                "KITTENTTS_SERVER_VOICE_MAP must be a JSON object",
-            ));
-        }
-        overrides.insert("voice_map".to_string(), value);
+        let value = parse_json_mapping(&voice_map, &format!("{ENV_PREFIX}VOICE_MAP"))?;
+        overrides.insert(
+            "voice_map".to_string(),
+            serde_json::to_value(value).map_err(|err| {
+                AppError::internal(format!("failed to serialize voice_map override: {err}"))
+            })?,
+        );
     }
 
     Ok(overrides)
@@ -213,4 +239,12 @@ fn parse_bool(value: &str) -> Result<bool, AppError> {
             "invalid boolean value: {value:?}"
         ))),
     }
+}
+
+fn parse_json_mapping(value: &str, env_name: &str) -> Result<BTreeMap<String, String>, AppError> {
+    serde_json::from_str::<BTreeMap<String, String>>(value).map_err(|err| {
+        AppError::invalid_config(format!(
+            "{env_name} must be a JSON object with string values: {err}"
+        ))
+    })
 }
