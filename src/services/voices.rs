@@ -40,6 +40,8 @@ pub(crate) fn resolve_voice(
 
     match requested_voice_id {
         Some(requested_voice_id) if !requested_voice_id.is_empty() => {
+            // Preserve the Python lookup order exactly: alias map first,
+            // case-insensitive direct match second, default fallback last.
             if let Some(mapped_voice) = voice_map.get(requested_voice_id) {
                 return match_available_voice(mapped_voice, &available)
                     .unwrap_or_else(|| mapped_voice.clone());

@@ -240,3 +240,13 @@
 - Re-ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features` in `KittenTTS_rust_server` after the manual validation documentation updates.
 - Results were still clean: unit tests `52 passed, 0 failed, 1 ignored`; config integration tests `13 passed, 0 failed, 1 ignored`; health integration tests `8 passed, 0 failed`; doc tests `0 failed`.
 - The worktree at this point contains the expected documentation-only edits in `README.md`, `docs/RUST_PORT_TODO.md`, and `memory.md`.
+
+## 2026-03-22T22:19:39Z - GPT-5.4 - Phase 10 acceptance is now complete
+- Finished the remaining Phase 10.4 cleanup/documentation items by adding compatibility-focused comments in `src/routes/tts.rs`, `src/backend/kitten.rs`, and `src/services/voices.rs`, plus README sections for architecture, model assets/dependencies, pseudo-streaming limits, and non-goals.
+- Re-ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`; results remained clean with `52 passed, 0 failed, 1 ignored` in unit tests, `13 passed, 0 failed, 1 ignored` in config integration tests, and `8 passed, 0 failed` in health integration tests.
+- Marked Phase 10 acceptance complete in `docs/RUST_PORT_TODO.md` because the port is now documented, test-covered, and the known compatibility differences are explicitly called out in `README.md`.
+
+## 2026-03-22T22:20:42Z - GPT-5.4 - Validation rerun remains clean after Phase 10 acceptance sync
+- Re-ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features` in `KittenTTS_rust_server` after the Phase 10 acceptance checklist update.
+- Results were still clean: unit tests `52 passed, 0 failed, 1 ignored`; config integration tests `13 passed, 0 failed, 1 ignored`; health integration tests `8 passed, 0 failed`; doc tests `0 failed`.
+- The worktree at this point contains the expected Phase 10.4/10.5 edits in `README.md`, `docs/RUST_PORT_TODO.md`, `memory.md`, `src/backend/kitten.rs`, `src/routes/tts.rs`, and `src/services/voices.rs`.

@@ -185,6 +185,8 @@ where
         .as_ref()
         .ok_or_else(|| AppError::validation("voice_id is required before backend synthesis"))?;
 
+    // The HTTP compatibility layer intentionally forces clean_text off to match
+    // the Python server's backend call path.
     generate(&request.text, voice, request.speed, false).map_err(|err| {
         AppError::new(
             StatusCode::INTERNAL_SERVER_ERROR,

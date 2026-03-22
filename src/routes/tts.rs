@@ -141,6 +141,8 @@ fn build_streaming_tts_response(
         stream_format.channels,
     )?;
 
+    // Compatibility note: v1 keeps the Python shim's pseudo-streaming contract.
+    // The full payload is synthesized first and only then emitted as chunks.
     let response_bytes = match stream_format.container {
         "pcm" => serialize_pcm_s16le(&normalized_audio)?,
         _ => serialize_wav(&normalized_audio)?,
@@ -180,6 +182,8 @@ fn synthesize_audio(
     request_context: &SharedRequestContext,
 ) -> Result<crate::services::audio::AudioBuffer, AppError> {
     let available_voices = state.synth_runtime.synthesizer().list_voices();
+    // Keep resolution in the HTTP layer so alias-first, direct-match, and
+    // default-fallback behavior stays aligned with the Python compatibility target.
     let resolved_voice = resolve_voice(
         internal_request.voice_id.as_deref(),
         &state.settings.voice_map,

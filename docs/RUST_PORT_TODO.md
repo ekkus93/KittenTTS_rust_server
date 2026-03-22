@@ -538,7 +538,7 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 ### 10.3 Optional manual validation tasks
 - [x] Run the Rust service and Python service side by side
 - [x] Send the same request payloads to both
-- [ ] Compare:
+- [x] Compare:
   - [x] status codes
   - [x] response headers
   - [x] JSON shape
@@ -547,15 +547,15 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 - [x] Note any intentional differences in a compatibility section of the README
 
 ### 10.4 Cleanup and documentation
-- [ ] Add code comments around compatibility-sensitive logic
-- [ ] Add README notes on architecture
-- [ ] Add README notes on model assets and dependencies
-- [ ] Add README notes on limitations of pseudo-streaming
-- [ ] Add README notes on non-goals
+- [x] Add code comments around compatibility-sensitive logic
+- [x] Add README notes on architecture
+- [x] Add README notes on model assets and dependencies
+- [x] Add README notes on limitations of pseudo-streaming
+- [x] Add README notes on non-goals
 
 ### 10.5 Acceptance for Phase 10
-- [ ] The Rust port is understandable, test-covered, and documented
-- [ ] Known compatibility differences are explicit, not accidental
+- [x] The Rust port is understandable, test-covered, and documented
+- [x] Known compatibility differences are explicit, not accidental
 
 ---
 
