@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 #[cfg(feature = "real-backend")]
 use std::process::Command;
 #[cfg(feature = "real-backend")]
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 #[cfg(feature = "real-backend")]
 use tracing::info;
 #[cfg(feature = "real-backend")]
@@ -43,6 +43,27 @@ type BackendSynthesizeFn =
 
 #[cfg(feature = "real-backend")]
 const ORT_DYLIB_ENV: &str = "ORT_DYLIB_PATH";
+
+#[cfg(feature = "real-backend")]
+static ORT_PRE_RUNTIME_METADATA: OnceLock<OrtRuntimeMetadata> = OnceLock::new();
+
+/// Resolves the ONNX Runtime shared library path and records the result in a
+/// process-wide cache.  Must be called **before** the tokio runtime starts so
+/// that `env::set_var` is not racing with other threads.
+#[cfg(feature = "real-backend")]
+pub(crate) fn setup_ort_before_runtime() {
+    let metadata = apply_ort_dylib_path();
+    // OnceLock::set is intentionally allowed to fail on repeated calls (e.g.
+    // in tests that bypass the normal startup path).
+    let _ = ORT_PRE_RUNTIME_METADATA.set(metadata);
+}
+
+/// Returns the ONNX Runtime metadata recorded by `setup_ort_before_runtime`,
+/// or `None` if that function was not called before the backend was created.
+#[cfg(feature = "real-backend")]
+pub(crate) fn cached_ort_metadata() -> Option<&'static OrtRuntimeMetadata> {
+    ORT_PRE_RUNTIME_METADATA.get()
+}
 
 #[cfg(feature = "real-backend")]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -79,17 +100,19 @@ struct ModelConfig {
 
 #[cfg(feature = "real-backend")]
 impl KittenBackend {
-    pub(crate) fn from_settings(
-        settings: &Settings,
-    ) -> Result<(Self, OrtRuntimeMetadata), AppError> {
-        let ort_runtime = configure_default_ort_dylib_path();
+    pub(crate) fn from_settings(settings: &Settings) -> Result<Self, AppError> {
+        if let Some(metadata) = cached_ort_metadata() {
+            info!(
+                source = metadata.source,
+                path = ?metadata.path,
+                "ONNX Runtime shared library path"
+            );
+        }
 
-        let backend = match backend_model_source(settings) {
+        match backend_model_source(settings) {
             BackendModelSource::ModelDir(model_dir) => Self::from_model_dir(model_dir),
             BackendModelSource::HuggingFaceRepo(repo_id) => Self::from_repo(repo_id),
-        }?;
-
-        Ok((backend, ort_runtime))
+        }
     }
 
     pub(crate) fn from_model_dir(model_dir: &Path) -> Result<Self, AppError> {
@@ -249,34 +272,43 @@ fn backend_model_source(settings: &Settings) -> BackendModelSource<'_> {
     }
 }
 
+/// Parse a dotted version string like `"1.24.2"` into a `(major, minor, patch)` tuple
+/// so version numbers are compared numerically rather than lexicographically.
+/// Unparseable components default to `0`.
 #[cfg(feature = "real-backend")]
-fn configure_default_ort_dylib_path() -> OrtRuntimeMetadata {
+fn parse_semver(s: &str) -> (u32, u32, u32) {
+    let mut parts = s.splitn(4, '.');
+    let major = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
+    let minor = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
+    let patch = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
+    (major, minor, patch)
+}
+
+#[cfg(feature = "real-backend")]
+fn apply_ort_dylib_path() -> OrtRuntimeMetadata {
     match selected_ort_dylib_source() {
-        OrtDylibSource::Configured(path) => {
-            info!(source = "env", path = %path.display(), "selected ONNX Runtime shared library path");
-            OrtRuntimeMetadata {
-                source: "env",
-                path: Some(path),
-            }
-        }
+        OrtDylibSource::Configured(path) => OrtRuntimeMetadata {
+            source: "env",
+            path: Some(path),
+        },
         OrtDylibSource::LocalDiscovery(path) => {
-            info!(source = "local_discovery", path = %path.display(), "selected ONNX Runtime shared library path");
-            env::set_var(ORT_DYLIB_ENV, &path);
+            // SAFETY: this function is called before the tokio runtime starts
+            // (via `setup_ort_before_runtime` in `main`), so the process is
+            // single-threaded here and no other thread can concurrently read or
+            // write environment variables.
+            #[allow(unused_unsafe)]
+            unsafe {
+                env::set_var(ORT_DYLIB_ENV, &path)
+            };
             OrtRuntimeMetadata {
                 source: "local_discovery",
                 path: Some(path),
             }
         }
-        OrtDylibSource::SystemDefault => {
-            info!(
-                source = "system_default",
-                "selected ONNX Runtime shared library path"
-            );
-            OrtRuntimeMetadata {
-                source: "system_default",
-                path: None,
-            }
-        }
+        OrtDylibSource::SystemDefault => OrtRuntimeMetadata {
+            source: "system_default",
+            path: None,
+        },
     }
 }
 
@@ -306,7 +338,16 @@ fn discover_default_ort_dylib_path() -> Option<PathBuf> {
         .filter_map(|dir| newest_ort_dylib_in_dir(&dir))
         .collect();
 
-    candidates.sort_by(|left, right| right.cmp(left));
+    candidates.sort_by(|left, right| {
+        let semver_key = |p: &PathBuf| {
+            p.parent()
+                .and_then(|dir| dir.file_name())
+                .and_then(|name| name.to_str())
+                .map(parse_semver)
+                .unwrap_or_default()
+        };
+        semver_key(right).cmp(&semver_key(left))
+    });
     candidates.into_iter().next()
 }
 
@@ -325,7 +366,16 @@ fn newest_ort_dylib_in_dir(dir: &Path) -> Option<PathBuf> {
         })
         .collect();
 
-    dylibs.sort_by(|left, right| right.cmp(left));
+    dylibs.sort_by(|left, right| {
+        let semver_key = |p: &PathBuf| {
+            p.file_name()
+                .and_then(|name| name.to_str())
+                .and_then(|name| name.strip_prefix("libonnxruntime.so."))
+                .map(parse_semver)
+                .unwrap_or_default()
+        };
+        semver_key(right).cmp(&semver_key(left))
+    });
     dylibs.into_iter().next()
 }
 
@@ -359,14 +409,17 @@ fn verify_espeak_ng_binary(program: &str) -> Result<(), AppError> {
 }
 
 #[cfg(feature = "real-backend")]
-const _: fn(&Settings) -> Result<(KittenBackend, OrtRuntimeMetadata), AppError> =
-    KittenBackend::from_settings;
+const _: fn(&Settings) -> Result<KittenBackend, AppError> = KittenBackend::from_settings;
 #[cfg(feature = "real-backend")]
 const _: LoadBackendFn = KittenBackend::from_model_dir;
 #[cfg(feature = "real-backend")]
 const _: fn(&str) -> Result<KittenBackend, AppError> = KittenBackend::from_repo;
 #[cfg(feature = "real-backend")]
-const _: fn() -> OrtRuntimeMetadata = configure_default_ort_dylib_path;
+const _: fn() = setup_ort_before_runtime;
+#[cfg(feature = "real-backend")]
+const _: fn() -> Option<&'static OrtRuntimeMetadata> = cached_ort_metadata;
+#[cfg(feature = "real-backend")]
+const _: fn() -> OrtRuntimeMetadata = apply_ort_dylib_path;
 #[cfg(feature = "real-backend")]
 const _: fn() -> OrtDylibSource = selected_ort_dylib_source;
 #[cfg(feature = "real-backend")]
@@ -505,11 +558,11 @@ mod tests {
     }
 
     #[test]
-    fn configure_default_ort_dylib_path_respects_existing_override() {
+    fn apply_ort_dylib_path_respects_existing_env_var() {
         let _guard = env_guard();
         env::set_var(ORT_DYLIB_ENV, "/already/configured/libonnxruntime.so");
 
-        let metadata = configure_default_ort_dylib_path();
+        let metadata = apply_ort_dylib_path();
 
         assert_eq!(
             env::var_os(ORT_DYLIB_ENV),
@@ -539,7 +592,7 @@ mod tests {
     }
 
     #[test]
-    fn configure_default_ort_dylib_path_sets_local_candidate() {
+    fn apply_ort_dylib_path_sets_local_candidate() {
         let _guard = env_guard();
         let home_dir = temp_model_dir("ort-home-configure");
         let ort_dir = home_dir.join(".local/share/onnxruntime/1.24.2");
@@ -548,7 +601,7 @@ mod tests {
         fs::write(&expected_path, b"fake-ort").unwrap();
         env::set_var("HOME", &home_dir);
 
-        let metadata = configure_default_ort_dylib_path();
+        let metadata = apply_ort_dylib_path();
 
         assert_eq!(env::var_os(ORT_DYLIB_ENV), Some(expected_path.into()));
         assert_eq!(
@@ -563,12 +616,12 @@ mod tests {
     }
 
     #[test]
-    fn configure_default_ort_dylib_path_reports_system_default_when_nothing_is_found() {
+    fn apply_ort_dylib_path_reports_system_default_when_nothing_is_found() {
         let _guard = env_guard();
         let home_dir = temp_model_dir("ort-home-system-default-configure");
         env::set_var("HOME", &home_dir);
 
-        let metadata = configure_default_ort_dylib_path();
+        let metadata = apply_ort_dylib_path();
 
         assert_eq!(
             metadata,
@@ -608,6 +661,9 @@ mod tests {
             default_voice_id: "jasper".to_string(),
             ..Settings::default()
         };
+        // Ensure ORT_DYLIB_PATH is resolved before the backend initialises
+        // ONNX Runtime (mimics the pre-runtime setup done in `main`).
+        let _ = apply_ort_dylib_path();
 
         let runtime = create_synth_runtime(&settings).expect("runtime should initialize");
         let result = runtime
@@ -626,6 +682,47 @@ mod tests {
         assert_eq!(result.audio.sample_rate, KITTEN_TTS_SAMPLE_RATE);
         assert_eq!(result.audio.channels, KITTEN_TTS_CHANNELS);
         assert!(!result.audio.waveform.is_empty());
+    }
+
+    #[test]
+    fn parse_semver_handles_version_strings_correctly() {
+        assert_eq!(parse_semver("1.24.2"), (1, 24, 2));
+        assert_eq!(parse_semver("1.9.0"), (1, 9, 0));
+        assert_eq!(parse_semver("1.10.0"), (1, 10, 0));
+        assert_eq!(parse_semver("2.0.0"), (2, 0, 0));
+        assert_eq!(parse_semver("not-a-version"), (0, 0, 0));
+        assert_eq!(parse_semver(""), (0, 0, 0));
+        // Key correctness check: 1.10.0 > 1.9.0 numerically.
+        assert!(parse_semver("1.10.0") > parse_semver("1.9.0"));
+        assert!(parse_semver("1.24.2") > parse_semver("1.10.0"));
+    }
+
+    #[test]
+    fn discover_default_ort_dylib_path_selects_newest_version_numerically() {
+        let _guard = env_guard();
+        let home_dir = temp_model_dir("ort-home-semver");
+        // Create three version directories: 1.9.0 < 1.10.0 < 1.24.2.
+        // Lexicographic ordering would put "1.9.0" first (wrong); numeric
+        // ordering must select "1.24.2".
+        for ver in &["1.9.0", "1.10.0", "1.24.2"] {
+            let dir = home_dir.join(format!(".local/share/onnxruntime/{ver}"));
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(dir.join(format!("libonnxruntime.so.{ver}")), b"fake-ort").unwrap();
+        }
+        env::set_var("HOME", &home_dir);
+
+        let discovered = discover_default_ort_dylib_path();
+
+        assert_eq!(
+            discovered.as_deref(),
+            Some(
+                home_dir
+                    .join(".local/share/onnxruntime/1.24.2/libonnxruntime.so.1.24.2")
+                    .as_path()
+            )
+        );
+
+        fs::remove_dir_all(home_dir).unwrap();
     }
 
     struct EnvResetGuard {

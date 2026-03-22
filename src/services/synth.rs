@@ -1,5 +1,5 @@
 #[cfg(feature = "real-backend")]
-use crate::backend::kitten::{KittenBackend, OrtRuntimeMetadata};
+use crate::backend::kitten::KittenBackend;
 use crate::config::Settings;
 use crate::error::{AppError, AppErrorCode};
 use crate::models::internal::InternalSynthesisRequest;
@@ -138,15 +138,15 @@ pub(crate) fn unavailable_runtime(settings: &Settings) -> SynthRuntime {
 pub(crate) fn create_synth_runtime(settings: &Settings) -> Result<SynthRuntime, AppError> {
     #[cfg(feature = "real-backend")]
     {
-        let (backend, ort_runtime): (KittenBackend, OrtRuntimeMetadata) =
-            KittenBackend::from_settings(settings)?;
+        let backend = KittenBackend::from_settings(settings)?;
+        let ort_metadata = crate::backend::kitten::cached_ort_metadata();
         Ok(SynthRuntime {
             synthesizer: Arc::new(backend),
             engine_name: "kitten_tts_rs".to_string(),
             engine_version: None,
             model_loaded: true,
-            onnx_runtime_source: Some(ort_runtime.source.to_string()),
-            onnx_runtime_path: ort_runtime.path,
+            onnx_runtime_source: ort_metadata.map(|m| m.source.to_string()),
+            onnx_runtime_path: ort_metadata.and_then(|m| m.path.clone()),
         })
     }
 
