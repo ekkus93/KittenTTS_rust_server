@@ -1,0 +1,25 @@
+[package]
+name = "kittentts-server-rs"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Compatibility-focused Rust server for KittenTTS"
+
+[lib]
+name = "kittentts_server_rs"
+path = "src/lib.rs"
+
+[[bin]]
+name = "kittentts-server-rs"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
+tower = { version = "0.5", features = ["util"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+uuid = { version = "1", features = ["serde", "v4"] }
