@@ -157,3 +157,7 @@
 - Ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features` in `KittenTTS_rust_server`; all checks passed after a minimal rustfmt line-wrap fix in `tests/health.rs`.
 - Standard all-features test results were clean: 49 passed, 0 failed, 1 ignored in `src/lib.rs`, plus 10 passing tests in `tests/config.rs` and 8 passing tests in `tests/health.rs`.
 - Also ran the ignored real-backend synthesis test `create_synth_runtime_can_generate_speech_with_real_model_assets` with `ORT_DYLIB_PATH` set to the local ONNX Runtime shared library and `KITTENTTS_SERVER_TEST_MODEL_DIR` pointed at the cached `KittenML/kitten-tts-nano-0.8` snapshot; it passed locally.
+
+## 2026-03-22T12:45:45-07:00 - GPT-5.4 - Route and middleware parity batch pushed
+- Committed and pushed the current Rust server work to `origin/master` as `9abd0c1e3df8104599931c20475a36b9d7446f00` with subject `feat: complete route and middleware parity`.
+- The working tree was clean after push.
