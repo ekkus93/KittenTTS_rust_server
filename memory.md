@@ -285,3 +285,11 @@
 - Section mirrors the Python server README structure with three subsections: Common checks (healthz, voices), ElevenLabs route checks (default voice, Jasper, pseudo-stream), and OpenAI route checks (WAV, bearer auth, xi-api-key PCM).
 - Includes `aplay`/`ffmpeg` playback notes for the raw PCM output, and a note on how to start the Rust server before running the smoke tests.
 - All curl commands use the same port, voice names, and model identifiers as the Python server equivalents.
+
+## 2026-03-22T23:55:12Z - Claude Sonnet 4.6 - Fixed Docker crash-loop caused by cap_drop: ALL
+- Root cause: `docker-entrypoint.sh` used `install -d -o elkitten -g elkitten` to create dirs. `install(1)` always calls `chown()` even when ownership is already correct, which requires `CAP_CHOWN`. `compose.yaml` has `cap_drop: ALL` so `CAP_CHOWN` is dropped → crash on every container start.
+- First fix attempt: replaced with `exec gosu elkitten mkdir -p` — also failed because `gosu` requires `CAP_SETUID`/`CAP_SETGID` which are also in the `ALL` drop set. Error: `failed switching to "elkitten": operation not permitted`.
+- Final fix: added `USER elkitten` to `Dockerfile` (between the `chmod 0755` line and `EXPOSE 8008`). Rewrote `docker-entrypoint.sh` to plain `mkdir -p` + `exec "$@"` — no privilege switching, no capabilities needed. Directories created by `elkitten` are automatically owned by `elkitten`.
+- `gosu` is still installed in the image but no longer invoked; can be removed in a future cleanup.
+- Confirmed: container reaches `(healthy)` status, `/healthz` returns 200 with `model_loaded:true`.
+- Changed files: `Dockerfile`, `docker-entrypoint.sh`.

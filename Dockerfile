@@ -63,6 +63,8 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
 
+USER elkitten
+
 EXPOSE 8008
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
