@@ -1,4 +1,6 @@
-use kittentts_server_rs::{load_settings, Settings};
+#[cfg(feature = "real-backend")]
+use kittentts_server_rs::app_state::initialize_app_state;
+use kittentts_server_rs::{load_settings, AppErrorCode, Settings};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -210,6 +212,100 @@ fn rejects_empty_model_dir() {
     assert!(error.message.contains("model_dir must not be empty"));
 }
 
+#[test]
+fn startup_fails_with_invalid_config() {
+    let _guard = env_guard();
+    let config_path = write_temp_config(
+        r#"{
+            "log_level": "VERBOSE",
+            "output_format": "wav"
+        }"#,
+    );
+
+    let error = load_settings(Some(config_path)).unwrap_err();
+
+    assert_eq!(error.code, AppErrorCode::InvalidConfig);
+    assert!(error
+        .message
+        .contains("log_level must be one of CRITICAL, ERROR, WARNING, INFO, DEBUG"));
+}
+
+#[cfg(feature = "real-backend")]
+#[test]
+fn startup_fails_with_missing_model_file() {
+    let _guard = env_guard();
+    let model_dir = write_temp_model_dir(Some(b"placeholder-voices"), None);
+    let config_path = write_temp_config(&format!(
+        r#"{{
+            "model_dir": "{}",
+            "output_format": "wav"
+        }}"#,
+        model_dir.display()
+    ));
+
+    let settings = load_settings(Some(config_path)).unwrap();
+    let error = match initialize_app_state(settings) {
+        Ok(_) => panic!("expected startup to fail when model.onnx is missing"),
+        Err(error) => error,
+    };
+
+    assert_eq!(error.code, AppErrorCode::BackendUnavailable);
+    assert!(error.message.contains("model.onnx"));
+
+    fs::remove_dir_all(model_dir).unwrap();
+}
+
+#[cfg(feature = "real-backend")]
+#[test]
+fn startup_fails_with_missing_voices_file() {
+    let _guard = env_guard();
+    let model_dir = write_temp_model_dir(None, Some(b"placeholder-model"));
+    let config_path = write_temp_config(&format!(
+        r#"{{
+            "model_dir": "{}",
+            "output_format": "wav"
+        }}"#,
+        model_dir.display()
+    ));
+
+    let settings = load_settings(Some(config_path)).unwrap();
+    let error = match initialize_app_state(settings) {
+        Ok(_) => panic!("expected startup to fail when voices.npz is missing"),
+        Err(error) => error,
+    };
+
+    assert_eq!(error.code, AppErrorCode::BackendUnavailable);
+    assert!(error.message.contains("voices.npz"));
+
+    fs::remove_dir_all(model_dir).unwrap();
+}
+
+#[cfg(feature = "real-backend")]
+#[test]
+#[ignore = "requires KITTENTTS_SERVER_TEST_MODEL_DIR and a host environment that can initialize the real backend"]
+fn startup_with_valid_config_initializes_app_state() {
+    let _guard = env_guard();
+    let model_dir = env::var("KITTENTTS_SERVER_TEST_MODEL_DIR")
+        .expect("KITTENTTS_SERVER_TEST_MODEL_DIR must be set for this test");
+    let config_path = write_temp_config(&format!(
+        r#"{{
+            "host": "127.0.0.1",
+            "port": 8012,
+            "model_dir": "{}",
+            "default_voice_id": "jasper",
+            "output_format": "wav"
+        }}"#,
+        model_dir
+    ));
+
+    let settings = load_settings(Some(config_path)).unwrap();
+    let state = initialize_app_state(settings.clone()).expect("startup should succeed");
+
+    assert_eq!(state.settings, settings);
+    assert!(state.engine_metadata.model_loaded);
+    assert_eq!(state.engine_metadata.engine, "kitten_tts_rs");
+}
+
 struct EnvResetGuard {
     saved: Vec<(&'static str, Option<String>)>,
     _lock: std::sync::MutexGuard<'static, ()>,
@@ -249,10 +345,35 @@ fn write_temp_config(contents: &str) -> PathBuf {
     path
 }
 
+fn write_temp_model_dir(voices_contents: Option<&[u8]>, model_contents: Option<&[u8]>) -> PathBuf {
+    let path = unique_temp_model_dir();
+    fs::create_dir_all(&path).unwrap();
+    fs::write(
+        path.join("config.json"),
+        r#"{"model_file":"model.onnx","voices":"voices.npz"}"#,
+    )
+    .unwrap();
+    if let Some(voices_contents) = voices_contents {
+        fs::write(path.join("voices.npz"), voices_contents).unwrap();
+    }
+    if let Some(model_contents) = model_contents {
+        fs::write(path.join("model.onnx"), model_contents).unwrap();
+    }
+    path
+}
+
 fn unique_temp_path() -> PathBuf {
     let unique = UNIQUE_COUNTER.fetch_add(1, Ordering::Relaxed);
     env::temp_dir().join(format!(
         "kittentts-server-rs-config-{}-{unique}.json",
+        process::id()
+    ))
+}
+
+fn unique_temp_model_dir() -> PathBuf {
+    let unique = UNIQUE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    env::temp_dir().join(format!(
+        "kittentts-server-rs-model-dir-{}-{unique}",
         process::id()
     ))
 }

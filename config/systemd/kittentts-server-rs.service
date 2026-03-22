@@ -1,0 +1,21 @@
+[Unit]
+Description=KittenTTS Rust local ElevenLabs-compatible TTS shim
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kittentts-server
+Group=kittentts-server
+WorkingDirectory=/opt/kittentts-server-rs
+Environment=KITTENTTS_SERVER_CONFIG_FILE=/opt/kittentts-server-rs/config/settings.json
+Environment=HF_HOME=/opt/kittentts-server-rs/.cache/huggingface
+Environment=RUST_LOG=info
+EnvironmentFile=-/etc/default/kittentts-server-rs
+ExecStart=/opt/kittentts-server-rs/bin/kittentts-server-rs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

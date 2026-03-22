@@ -1,10 +1,11 @@
-use axum::body::Body;
+use axum::body::{Body, Bytes};
 use axum::extract::{Path, State};
 use axum::http::header::{CONTENT_LENGTH, CONTENT_TYPE};
 use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Extension, Json, Router};
+use futures_util::stream;
 use serde_json::Value;
 
 use crate::app_state::AppState;
@@ -20,6 +21,7 @@ use crate::services::audio::{
 use crate::services::voices::resolve_voice;
 
 const SUPPORTED_STREAM_SAMPLE_RATES: [u32; 4] = [16_000, 22_050, 24_000, 44_100];
+const STREAM_CHUNK_SIZE: usize = 4096;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct StreamFormat {
@@ -321,7 +323,12 @@ fn build_streaming_response(
     let output_format_value = HeaderValue::from_str(&stream_format.header_value)
         .map_err(|err| AppError::internal(format!("invalid X-Output-Format header: {err}")))?;
 
-    let mut response = Response::new(Body::from(bytes));
+    let chunks = bytes
+        .chunks(STREAM_CHUNK_SIZE)
+        .map(Bytes::copy_from_slice)
+        .map(Ok::<_, std::convert::Infallible>)
+        .collect::<Vec<_>>();
+    let mut response = Response::new(Body::from_stream(stream::iter(chunks)));
     *response.status_mut() = StatusCode::OK;
     response.headers_mut().insert(CONTENT_TYPE, content_type);
     response
@@ -357,9 +364,11 @@ fn build_binary_response(
 mod tests {
     use super::*;
     use crate::app_state::AppState;
+    use crate::middleware::request_context::RequestContext;
     use crate::services::synth::{test_runtime, FloatAudioBuffer, SynthResult, Synthesizer};
     use axum::body::{to_bytes, Body};
     use axum::http::Request;
+    use futures_util::StreamExt;
     use serde_json::json;
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
@@ -395,13 +404,30 @@ mod tests {
         settings: crate::config::Settings,
         last_voice: Arc<Mutex<Option<String>>>,
     ) -> AppState {
+        test_state_with_waveform(settings, last_voice, vec![0.0, 0.25, -0.25, 0.5])
+    }
+
+    fn test_state_with_waveform(
+        settings: crate::config::Settings,
+        last_voice: Arc<Mutex<Option<String>>>,
+        waveform: Vec<f32>,
+    ) -> AppState {
         let synthesizer = FakeSynthesizer {
             available_voices: vec!["Jasper".to_string(), "Bella".to_string()],
-            waveform: vec![0.0, 0.25, -0.25, 0.5],
+            waveform,
             last_voice,
         };
 
         AppState::from_runtime(settings, test_runtime(synthesizer))
+    }
+
+    fn test_request_context() -> SharedRequestContext {
+        Arc::new(Mutex::new(RequestContext {
+            request_id: "test-request-id".to_string(),
+            selected_voice: None,
+            text_length: None,
+            error_code: None,
+        }))
     }
 
     #[tokio::test]
@@ -429,6 +455,56 @@ mod tests {
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         assert_eq!(&body[0..4], b"RIFF");
         assert_eq!(*last_voice.lock().unwrap(), Some("Jasper".to_string()));
+    }
+
+    #[test]
+    fn synthesize_audio_records_resolved_voice_in_request_context() {
+        let last_voice = Arc::new(Mutex::new(None));
+        let settings = crate::config::Settings {
+            voice_map: BTreeMap::from([("Narrator".to_string(), "Bella".to_string())]),
+            ..crate::config::Settings::default()
+        };
+        let state = test_state(settings, Arc::clone(&last_voice));
+        let request_context = test_request_context();
+        let request = InternalSynthesisRequest {
+            text: "hello request context".to_string(),
+            voice_id: Some("Narrator".to_string()),
+            model_id: None,
+            speed: 1.0,
+            output_format: Some("wav".to_string()),
+            streaming: false,
+        };
+
+        synthesize_audio(&request, &state, &request_context).unwrap();
+
+        assert_eq!(*last_voice.lock().unwrap(), Some("Bella".to_string()));
+        assert_eq!(
+            request_context.lock().unwrap().selected_voice.as_deref(),
+            Some("Bella")
+        );
+    }
+
+    #[test]
+    fn synthesize_audio_records_text_length_in_request_context() {
+        let text = "hello request context";
+        let last_voice = Arc::new(Mutex::new(None));
+        let state = test_state(crate::config::Settings::default(), last_voice);
+        let request_context = test_request_context();
+        let request = InternalSynthesisRequest {
+            text: text.to_string(),
+            voice_id: None,
+            model_id: None,
+            speed: 1.0,
+            output_format: Some("wav".to_string()),
+            streaming: false,
+        };
+
+        synthesize_audio(&request, &state, &request_context).unwrap();
+
+        assert_eq!(
+            request_context.lock().unwrap().text_length,
+            Some(text.len())
+        );
     }
 
     #[tokio::test]
@@ -574,9 +650,10 @@ mod tests {
     #[tokio::test]
     async fn stream_route_returns_wav_response_with_stream_format() {
         let last_voice = Arc::new(Mutex::new(None));
-        let app = crate::routes::build_router(test_state(
+        let app = crate::routes::build_router(test_state_with_waveform(
             crate::config::Settings::default(),
             Arc::clone(&last_voice),
+            vec![0.1; 20_000],
         ));
 
         let response = app
@@ -596,8 +673,21 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers()[CONTENT_TYPE], "audio/wav");
         assert_eq!(response.headers()["X-Output-Format"], "wav_16000");
+        assert!(response.headers().get(CONTENT_LENGTH).is_none());
 
-        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let mut body_stream = response.into_body().into_data_stream();
+        let mut chunk_count = 0;
+        let mut collected = Vec::new();
+        while let Some(chunk) = body_stream.next().await {
+            let chunk = chunk.unwrap();
+            chunk_count += 1;
+            collected.extend_from_slice(&chunk);
+        }
+        assert!(
+            chunk_count > 1,
+            "expected more than one streamed body chunk"
+        );
+        let body = Bytes::from(collected);
         assert_eq!(&body[0..4], b"RIFF");
         assert_eq!(
             u32::from_le_bytes([body[24], body[25], body[26], body[27]]),

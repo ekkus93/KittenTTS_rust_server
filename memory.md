@@ -165,3 +165,63 @@
 ## 2026-03-22T19:47:23Z - GPT-5.4 - TODO synced for pushed middleware and validation coverage
 - Updated `docs/RUST_PORT_TODO.md` to mark the compatibility-focused validation items that are now explicitly covered by tests: style-row selection helper coverage, unknown-voice fallback coverage, and OpenAI-shaped auth error coverage.
 - Left broader acceptance items unchanged where behavior is still incomplete or only partially implemented, especially stream-route chunked body semantics, request-context metadata assertions, and deployment/runtime packaging work.
+
+## 2026-03-22T21:13:09Z - GPT-5.4 - Phase 9 deployment artifacts added and Docker validated
+- Added Phase 9 deployment files in `KittenTTS_rust_server`: `Dockerfile`, `compose.yaml`, `config/systemd/kittentts-server-rs.service`, and `docker-entrypoint.sh`, plus README deployment instructions for local run, Docker, compose, and systemd.
+- The Docker path keeps the sibling `kitten_tts_rs` local dependency boundary by using a named BuildKit context, bundles ONNX Runtime `1.24.2`, installs `espeak-ng`, and uses an entrypoint that prepares writable cache/config directories before dropping privileges back to `elkitten`.
+- Verified locally that `docker compose config` resolves successfully, the Docker image builds successfully with `--build-context kitten_tts_rs=/home/phil/work/kitten_tts_rs`, and a container started from that image serves `GET /healthz` on the published host port with `model_loaded: true`.
+- Updated `docs/RUST_PORT_TODO.md` to mark Phase 9 Docker/compose/systemd/docs tasks complete, plus `Service can run in Docker` and `Docker deployment works`; `Service can run under systemd` remains unverified.
+
+## 2026-03-22T21:18:14Z - GPT-5.4 - README systemd docs now include uninstall flow
+- Updated `README.md` to keep the documented systemd install flow and add a matching uninstall section covering `systemctl disable --now`, unit removal, daemon reload/reset, and optional cleanup of `/opt/kittentts-server-rs`, `/etc/default/kittentts-server-rs`, and the `kittentts-server` user/group.
+- Live systemd installation/testing remains deferred by user choice, so the Phase 9 systemd acceptance item stays unchecked until a real host validation is run later.
+
+## 2026-03-22T21:24:50Z - GPT-5.4 - Stream route now emits real multi-chunk pseudo-stream bodies
+- Added the approved direct dependency `futures-util = "0.3"` in `Cargo.toml` and changed `src/routes/tts.rs` to build `POST /v1/text-to-speech/{voice_id}/stream` responses with `axum::body::Body::from_stream(...)` over fixed-size chunks while still synthesizing the full audio payload first.
+- Added route-level verification that the WAV stream route omits `Content-Length` and yields more than one body chunk via `into_data_stream()`, while keeping the PCM stream and strict-mode rejection tests passing.
+- Full validation passed after the change: `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`.
+- Updated `docs/RUST_PORT_TODO.md` to mark the chunked pseudo-stream body task, the stream-body test item, and the Definition-of-done stream route item complete.
+
+## 2026-03-22T21:29:26Z - GPT-5.4 - Backend path now proves clean_text is forced off
+- Refactored the real backend adapter in `src/backend/kitten.rs` so the compatibility-sensitive generate call flows through a small helper that always passes `clean_text = false`.
+- Added `backend_synthesis_path_forces_clean_text_false`, which captures the generate-call arguments and proves the synthesis path used by the HTTP service sends `clean_text` as `false`.
+- Revalidated with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test --all-features backend_synthesis_path_forces_clean_text_false`, and `cargo test --all-features`.
+- Updated `docs/RUST_PORT_TODO.md` to mark the `clean_text=false` compatibility test item complete.
+
+## 2026-03-22T21:32:32Z - GPT-5.4 - Request-context coverage now asserts selected voice and text length
+- Added `synthesize_audio_records_resolved_voice_in_request_context` and `synthesize_audio_records_text_length_in_request_context` in `src/routes/tts.rs` to prove the TTS synthesis path records the resolved voice and input text length in the shared request context.
+- The selected-voice test uses alias resolution so the assertion proves the recorded value is the effective backend voice, not just the raw request path token.
+- Revalidated with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test synthesize_audio_records_`, and `cargo test --all-features`.
+- Updated `docs/RUST_PORT_TODO.md` to mark the remaining request-context compatibility test items complete.
+
+## 2026-03-22T21:35:40Z - GPT-5.4 - Phase 8 startup tests now cover boot success and failure paths
+- Added startup-path integration coverage in `tests/config.rs` for invalid config rejection, missing `model.onnx`, missing `voices.npz`, and an ignored real-backend success path that initializes app state from a valid config using `KITTENTTS_SERVER_TEST_MODEL_DIR`.
+- Kept the deterministic failure-path tests self-contained by generating temporary model directories with only the required missing asset omitted, so the boot path fails at the intended backend verification step.
+- Revalidated with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test --all-features --test config`, and `cargo test --all-features`.
+- Updated `docs/RUST_PORT_TODO.md` to mark all remaining Phase 8 startup test items complete.
+
+## 2026-03-22T21:44:29Z - GPT-5.4 - Phase 9 systemd acceptance validated with a live systemd smoke run
+- Verified the service can run under systemd by building `target/release/kittentts-server-rs` with `--features real-backend`, launching it as a transient user-managed unit with `systemd-run --user`, and confirming `/healthz` returned `status=ok`, `model_loaded=true`, and `engine=kitten_tts_rs` on port `18081`.
+- Journal logs from the smoke run showed the expected startup path under systemd: ONNX Runtime path selected from `ORT_DYLIB_PATH`, `espeak-ng` available, model and voices loaded from the cached Hugging Face snapshot, and the server listening successfully before serving the health request.
+- On this Ubuntu host, `systemd-analyze verify --root=...` is not supported for `verify`, so the shipped system unit could not be validated inside a fake install root that way; the acceptance decision was therefore based on the successful live systemd-managed smoke run plus the existing deployment docs/unit wiring.
+- Updated `docs/RUST_PORT_TODO.md` to mark `Service can run under systemd` and the Definition-of-done item `systemd deployment works` complete, then revalidated with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`.
+
+## 2026-03-22T21:50:08Z - GPT-5.4 - Espeak-ng runtime packaging is now explicitly proven and documented
+- Rebuilt the final Docker runtime image with `docker build --build-context kitten_tts_rs=../kitten_tts_rs -t kittentts-server-rs:latest .` and verified the packaged container includes a working `espeak-ng` binary via `docker run --rm --entrypoint espeak-ng kittentts-server-rs:latest --version`.
+- Combined that container proof with the earlier live systemd smoke run, whose journal showed `espeak-ng` available on the host path before model initialization, to close the remaining deployment packaging gap.
+- Updated `README.md` to make the packaging split explicit: Docker bundles `espeak-ng` in the runtime image, while systemd/local deployment expects `espeak-ng` to be installed on the host before startup.
+- Updated `docs/RUST_PORT_TODO.md` to mark the Definition-of-done item `espeak-ng is handled correctly in runtime packaging` complete, then revalidated with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`.
+
+## 2026-03-22T21:51:33Z - GPT-5.4 - Definition-of-done now matches completed Phase 10.2 compatibility coverage
+- Updated `docs/RUST_PORT_TODO.md` to mark the final Definition-of-done item `Compatibility-sensitive behavior is explicitly tested` complete.
+- This sync is based on the now-complete Phase 10.2 checklist items covering style-row selection, `clean_text=false`, unknown-voice fallback, request-context selected voice and text length, and OpenAI-shaped auth errors.
+
+## 2026-03-22T21:53:02Z - GPT-5.4 - Phase 10.1 regression checklist synced to explicit Python-vs-Rust comparison
+- Compared the Python compatibility target in `KittenTTS_server/app/api.py`, `app/auth.py`, `app/errors.py`, `app/models.py`, and `app/voices.py` against the Rust route/auth/error/voice implementations and tests in `src/routes/*`, `src/middleware/auth.rs`, `src/error.rs`, `src/services/voices.rs`, and `tests/health.rs`.
+- Marked the Phase 10.1 items complete for route paths, status codes, response headers, error envelopes, voice listing shape, auth behavior, output-format negotiation, and OpenAI route behavior.
+- The comparison confirmed the expected public surface and behavior parity points: `/healthz`, `/v1/voices`, `/v1/text-to-speech`, `/v1/text-to-speech/{voice_id}`, `/v1/text-to-speech/{voice_id}/stream`, and `/v1/audio/speech`; matching auth-policy split for public vs `/v1` routes; local vs OpenAI error-envelope split; ElevenLabs/OpenAI response headers including `X-Output-Format` and `X-Request-Id`; compatible voice descriptor shape and alias metadata; and the same supported WAV/PCM/output-format negotiation rules used by the Python shim.
+
+## 2026-03-22T21:55:02Z - GPT-5.4 - Full Rust validation rerun is clean
+- Re-ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features` in `KittenTTS_rust_server`.
+- Results were clean: unit tests `52 passed, 0 failed, 1 ignored`; config integration tests `13 passed, 0 failed, 1 ignored`; health integration tests `8 passed, 0 failed`; doc tests `0 failed`.
+- The ignored tests remain the host-dependent real-backend synthesis and valid-config startup checks that require `KITTENTTS_SERVER_TEST_MODEL_DIR` plus a compatible runtime environment.

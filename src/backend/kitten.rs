@@ -145,24 +145,20 @@ impl Synthesizer for KittenBackend {
     }
 
     fn synthesize(&self, request: &InternalSynthesisRequest) -> Result<SynthResult, AppError> {
-        let voice = request
-            .voice_id
-            .as_ref()
-            .ok_or_else(|| AppError::validation("voice_id is required before backend synthesis"))?;
-
         let mut backend = self
             .inner
             .lock()
             .map_err(|_| AppError::internal("kitten_tts backend mutex poisoned"))?;
-        let waveform = backend
-            .generate(&request.text, voice, request.speed, false)
-            .map_err(|err| {
-                AppError::new(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    AppErrorCode::Internal,
-                    format!("speech synthesis failed: {err}"),
-                )
-            })?;
+        let voice = request
+            .voice_id
+            .as_ref()
+            .ok_or_else(|| AppError::validation("voice_id is required before backend synthesis"))?;
+        let waveform = generate_waveform_with_clean_text(
+            request,
+            |text, requested_voice, speed, clean_text| {
+                backend.generate(text, requested_voice, speed, clean_text)
+            },
+        )?;
 
         Ok(SynthResult {
             audio: FloatAudioBuffer {
@@ -173,6 +169,29 @@ impl Synthesizer for KittenBackend {
             voice: voice.clone(),
         })
     }
+}
+
+#[cfg(feature = "real-backend")]
+fn generate_waveform_with_clean_text<F, E>(
+    request: &InternalSynthesisRequest,
+    mut generate: F,
+) -> Result<Vec<f32>, AppError>
+where
+    F: FnMut(&str, &str, f32, bool) -> Result<Vec<f32>, E>,
+    E: std::fmt::Display,
+{
+    let voice = request
+        .voice_id
+        .as_ref()
+        .ok_or_else(|| AppError::validation("voice_id is required before backend synthesis"))?;
+
+    generate(&request.text, voice, request.speed, false).map_err(|err| {
+        AppError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            AppErrorCode::Internal,
+            format!("speech synthesis failed: {err}"),
+        )
+    })
 }
 
 #[cfg(feature = "real-backend")]
@@ -403,6 +422,32 @@ mod tests {
         assert!(error.message.contains("model.onnx") || error.message.contains("voices.npz"));
 
         fs::remove_dir_all(model_dir).unwrap();
+    }
+
+    #[test]
+    fn backend_synthesis_path_forces_clean_text_false() {
+        let request = InternalSynthesisRequest {
+            text: "Hello from the HTTP service".to_string(),
+            voice_id: Some("jasper".to_string()),
+            model_id: None,
+            speed: 1.0,
+            output_format: Some("wav".to_string()),
+            streaming: false,
+        };
+        let seen_clean_text = std::sync::Arc::new(Mutex::new(None));
+        let seen_clean_text_in_generate = std::sync::Arc::clone(&seen_clean_text);
+
+        let waveform = generate_waveform_with_clean_text(
+            &request,
+            move |_text, _voice, _speed, clean_text| {
+                *seen_clean_text_in_generate.lock().unwrap() = Some(clean_text);
+                Ok::<Vec<f32>, std::io::Error>(vec![0.0, 0.25, -0.25])
+            },
+        )
+        .unwrap();
+
+        assert_eq!(waveform, vec![0.0, 0.25, -0.25]);
+        assert_eq!(*seen_clean_text.lock().unwrap(), Some(false));
     }
 
     #[test]
