@@ -255,3 +255,11 @@
 - Created commit `08c567b` (`docs: finish phase 10 cleanup and acceptance`) with the Phase 10.4 README/code-comment updates, the Phase 10.5 checklist completion, and the clean validation state.
 - Commit `08c567b` was created at `2026-03-22T15:21:36-07:00` according to `git log -1 --format="%aI" 08c567b`.
 - This interaction also included the requested check-in flow to prepare `master` for pushing the completed Phase 10 documentation and acceptance updates to GitHub.
+
+## 2026-03-22T22:55:54Z - Claude Sonnet 4.6 - Tier 1 code-review fixes implemented and pushed (commit 7b47a07)
+- Implemented both Tier 1 items from `docs/CODE_REVIEW_TODO1.md`.
+- **1.1 ORT semver sort**: Added `parse_semver(s) -> (u32, u32, u32)` helper; replaced lexicographic `PathBuf::cmp` sorts in `discover_default_ort_dylib_path` and `newest_ort_dylib_in_dir` with semver-keyed sorts; added two new tests (`parse_semver_handles_version_strings_correctly` and `discover_default_ort_dylib_path_selects_newest_version_numerically`).
+- **1.2 pre-runtime env::set_var**: Introduced `OnceLock<OrtRuntimeMetadata>` static; added `pub(crate) setup_ort_before_runtime()` (stores result of `apply_ort_dylib_path()` in OnceLock) and `pub(crate) cached_ort_metadata()` (reads from OnceLock); renamed `configure_default_ort_dylib_path` → `apply_ort_dylib_path` (private, `info!()` removed, `env::set_var` wrapped in `unsafe {}` with safety comment); `KittenBackend::from_settings` changed to `Result<Self, AppError>` (no longer calls `apply_ort_dylib_path`, logs from cache); `create_synth_runtime` uses `cached_ort_metadata()` for `SynthRuntime` fields; `lib.rs` exports `pub fn setup_ort_before_runtime()`; `main.rs` removes `#[tokio::main]`, calls `setup_ort_before_runtime()` before `tokio::runtime::Builder::new_multi_thread()...build()`.
+- All 75 tests pass (54 unit + 14 config + 8 health); 2 ignored; cargo clippy -D warnings clean.
+- Commit created at `2026-03-22T15:55:45-07:00`; pushed to `origin/master`.
+- Tier 1 checkboxes marked complete in `docs/CODE_REVIEW_TODO1.md`.
