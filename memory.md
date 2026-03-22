@@ -67,3 +67,8 @@
 - Reapplied the lost `kitten_tts_rs` compatibility changes after the repo path was replaced with a fresh fork clone, restoring the Python-compatible style-row helper/tests in `src/model.rs` and the backend voice-resolution tests in `src/voices.rs`.
 - Pushed the restored backend work to the writable fork as `6495a86 fix: restore backend compatibility helpers` on `origin/main`.
 - Validation for the backend fork: `cargo fmt --check` and `cargo check --all-features` passed; full `cargo test` remains blocked in this Linux environment by the same ONNX Runtime linker errors for missing glibc C23 symbols such as `__isoc23_strtol[l|ll|ull]`.
+
+## 2026-03-22T06:34:08Z - GPT-5.4 - Phase 4 audit documented
+- Completed the remaining Phase 4 audit checklist by comparing Python `kittentts/onnx_model.py` and `kittentts/preprocess.py` against the forked `kitten_tts_rs` backend for voice alias mapping, phonemizer usage, token-ID generation, style-row selection, output trimming, chunking, and preprocessing defaults.
+- Added an explicit audit summary and intentional-difference notes to `docs/RUST_PORT.md`, and marked the `docs/RUST_PORT_TODO.md` Phase 4.4 items complete plus `4.8`'s compatibility-documentation acceptance item complete.
+- Added code comments in the backend fork at the style-row, output-trim, and direct `espeak-ng` phonemizer boundaries so the remaining known difference is visible: direct `espeak-ng` shelling may not match Python `phonemizer` punctuation/stress output byte-for-byte.

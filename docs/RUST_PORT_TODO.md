@@ -250,14 +250,14 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 - [x] Ensure speed prior behavior remains compatible
 
 ### 4.4 Explicitly audit `kitten_tts_rs` behavior against Python KittenTTS
-- [ ] Compare voice alias mapping behavior
-- [ ] Compare phonemizer command usage
-- [ ] Compare token-ID generation logic
-- [ ] Compare style vector selection logic
-- [ ] Compare output trimming
-- [ ] Compare multi-chunk generation path
-- [ ] Compare preprocessing default behavior
-- [ ] Add comments or docs for any intentional differences
+- [x] Compare voice alias mapping behavior
+- [x] Compare phonemizer command usage
+- [x] Compare token-ID generation logic
+- [x] Compare style vector selection logic
+- [x] Compare output trimming
+- [x] Compare multi-chunk generation path
+- [x] Compare preprocessing default behavior
+- [x] Add comments or docs for any intentional differences
 
 ### 4.5 Decide how to apply compatibility fixes
 - [x] Option A: patch/fork `kitten_tts_rs`
@@ -281,7 +281,7 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 
 ### 4.8 Acceptance for Phase 4
 - [ ] Rust backend can produce speech for a known voice
-- [ ] Critical compatibility differences are addressed explicitly
+- [x] Critical compatibility differences are addressed explicitly
 - [ ] Startup behavior around missing dependencies is clear
 
 ---

@@ -111,6 +111,49 @@ So for the Rust server, `espeak-ng` should remain a required system dependency i
 
 ---
 
+## Phase 4 audit findings
+
+The backend audit compares `KittenTTS/kittentts/onnx_model.py` and `KittenTTS/kittentts/preprocess.py`
+against the forked `kitten_tts_rs` sources used by this server.
+
+### Audit summary
+
+- Voice alias mapping: partially compatible by design.
+  Python backend accepts configured `voice_aliases` and then requires an internal voice ID.
+  The Rust fork accepts configured aliases first, then built-in friendly names, then internal IDs.
+  This is an intentional extension to support the Rust server's compatibility layer and CLI ergonomics.
+
+- Phonemizer command usage: intentionally not byte-for-byte identical.
+  Python uses `phonemizer.backend.EspeakBackend(language="en-us", preserve_punctuation=True, with_stress=True)`.
+  The Rust fork shells out directly to `espeak-ng --ipa -q --sep= -v en-us`.
+  This keeps the Rust backend self-contained, but punctuation/stress output can differ subtly at the phoneme boundary.
+
+- Token-ID generation logic: compatible in structure.
+  Both implementations tokenize phoneme text with a word-or-punctuation split, join tokens with spaces, map characters through the same symbol table, and add leading `0`, trailing `10`, and final `0` markers.
+
+- Style vector selection logic: now explicitly compatible.
+  Python uses `min(len(text), rows - 1)` where `text` is the already chunked text string.
+  The Rust fork now mirrors that rule using character count instead of token count.
+
+- Output trimming: compatible.
+  Python trims the last 5000 samples from each generated chunk with `audio = outputs[0][..., :-5000]`.
+  The Rust fork trims `min(5000, audio.len())` samples from the end of each chunk.
+
+- Multi-chunk generation path: compatible in structure.
+  Both implementations split on sentence boundaries first, then split oversized sentences on whitespace boundaries, ensure terminal punctuation per chunk, synthesize each chunk independently, and concatenate the outputs in order.
+
+- Preprocessing default behavior: intentionally diverges at the backend boundary, but the server path preserves Python server behavior.
+  The Python backend defaults `clean_text=True`, while the Rust server deliberately calls the backend with `clean_text = false` to match `KittenTTS_server`.
+  The Rust fork still retains optional preprocessing support for direct backend/CLI use.
+
+### Intentional differences to keep visible
+
+- The Rust fork supports friendly built-in voice names directly inside the backend, while Python backend internals only require configured aliases plus internal voice IDs.
+- The Rust fork avoids Python's `phonemizer` package and calls `espeak-ng` directly, so exact punctuation/stress output is not guaranteed to be identical even though the same system dependency is used.
+- The Rust fork keeps optional preprocessing for standalone use, but the Rust HTTP server must continue to force `clean_text = false` for compatibility with `KittenTTS_server`.
+
+---
+
 ## Current Python server architecture
 
 Primary Python files:
