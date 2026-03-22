@@ -176,6 +176,10 @@ type UnavailableSynthesizeFn =
 #[cfg(test)]
 type TestRuntimeFn = fn(UnavailableSynthesizer) -> SynthRuntime;
 
+// Compile-time signature checks: these `const _:` bindings verify that each
+// crate-private function and method still matches its declared type alias.
+// They produce a type error at compile time if a signature drifts from the
+// alias, acting as a lightweight contract test with no runtime cost.
 const _: Option<FloatAudioBuffer> = None;
 const _: Option<SynthResult> = None;
 const _: Option<SynthRuntime> = None;

@@ -59,6 +59,20 @@ ORT_DYLIB_PATH="$HOME/.local/share/onnxruntime/1.24.2/libonnxruntime.so.1.24.2" 
 - Cache path resolution: `HF_HOME`, then `XDG_CACHE_HOME`, then `HOME/.cache/huggingface/hub`
 - ONNX Runtime shared library path override: `ORT_DYLIB_PATH`
 
+### Configuration precedence
+
+Settings are merged in this order (last write wins):
+
+1. Built-in defaults
+2. `KITTENTTS_SERVER_*` environment variables
+3. JSON config file
+
+The config file takes **final precedence** over environment variables. This matches
+the Python server's documented behavior and is intentional. This is the opposite
+of 12-factor app convention, where environment variables normally win. If you need
+env-only configuration (e.g. in a container), omit the config file rather than
+expecting environment variables to override it.
+
 ## Model Assets And Dependencies
 
 With `--features real-backend`, the runtime depends on:

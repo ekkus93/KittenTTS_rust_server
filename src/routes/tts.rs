@@ -337,8 +337,7 @@ fn build_binary_response(
     media_type: &'static str,
     output_format: &str,
 ) -> Result<Response, AppError> {
-    let content_length = HeaderValue::from_str(&bytes.len().to_string())
-        .map_err(|err| AppError::internal(format!("invalid Content-Length header: {err}")))?;
+    let content_length = HeaderValue::from(bytes.len());
     let content_type = HeaderValue::from_static(media_type);
     let output_format_value = HeaderValue::from_str(output_format)
         .map_err(|err| AppError::internal(format!("invalid X-Output-Format header: {err}")))?;

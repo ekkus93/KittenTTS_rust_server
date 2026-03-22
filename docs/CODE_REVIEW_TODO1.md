@@ -122,7 +122,7 @@ Replace `_ => 1` with `_ => unreachable!("channel_layout validated at config loa
 `bytes.len().to_string()` always produces a valid ASCII decimal; `from_str` cannot fail.
 The nominal error path is dead code and adds unnecessary visual noise.
 
-- [ ] Replace with `HeaderValue::from(bytes.len())` (infallible `From<usize>`)
+- [x] Replace with `HeaderValue::from(bytes.len())` (infallible `From<usize>`)
 
 ---
 
@@ -134,7 +134,7 @@ The blocks of `const _: SomeFnType = some_fn;` enforce compile-time signature st
 for private functions, which is a legitimate technique. But without a comment, developers
 unfamiliar with the pattern will waste time reverse-engineering the intent.
 
-- [ ] Add a brief comment block before the first `const _:` group in each file explaining
+- [x] Add a brief comment block before the first `const _:` group in each file explaining
   the intent (compile-time signature check for crate-private functions)
 
 ---
@@ -147,7 +147,7 @@ unfamiliar with the pattern will waste time reverse-engineering the intent.
 behavior and is intentional. Without a comment, a future reviewer may "fix" this by
 changing the multiplier to `32768.0`, breaking Python compatibility.
 
-- [ ] Add a comment: `// Matches Python: multiply by 32767, not 32768, for symmetric range`
+- [x] Add a comment: `// Matches Python: multiply by 32767, not 32768, for symmetric range`
 
 ---
 
@@ -166,8 +166,8 @@ Note: this was initially flagged as a bug in the code review. On inspection, it 
 and intentional — the Rust port matches the Python server's documented precedence. The
 action is purely documentation.
 
-- [ ] Add a `load_settings` doc comment in `config.rs` stating the merge order explicitly
-- [ ] Add a note to README explaining that the config file takes final precedence over env vars
+- [x] Add a `load_settings` doc comment in `config.rs` stating the merge order explicitly
+- [x] Add a note to README explaining that the config file takes final precedence over env vars
   and why (Python-compatible design)
 
 ---

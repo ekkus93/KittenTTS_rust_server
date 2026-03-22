@@ -110,6 +110,19 @@ impl Settings {
     }
 }
 
+/// Load and validate server settings from defaults, environment variables, and
+/// an optional JSON config file.
+///
+/// Merge order (last write wins):
+/// 1. Built-in defaults (`Settings::default()`)
+/// 2. `KITTENTTS_SERVER_*` environment variables
+/// 3. JSON config file (from `config_path`, `KITTENTTS_SERVER_CONFIG_FILE`, or
+///    the default path `config/settings.json` when it exists)
+///
+/// **Note:** the config file takes final precedence over environment variables.
+/// This matches the Python server's documented behavior and is intentional.
+/// Operators who want env-only configuration should omit the config file rather
+/// than rely on environment variables to override it.
 pub fn load_settings(config_path: Option<PathBuf>) -> Result<Settings, AppError> {
     let config_path = selected_config_path(config_path);
     let mut merged = default_config_values()?;

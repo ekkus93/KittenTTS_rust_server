@@ -21,6 +21,9 @@ pub(crate) fn float_audio_to_pcm(audio: &FloatAudioBuffer) -> Result<AudioBuffer
     let mut pcm_s16le = Vec::with_capacity(audio.waveform.len() * 2);
     for sample in &audio.waveform {
         let clipped = sample.clamp(-1.0, 1.0);
+        // Matches Python: KittenTTS multiplies by 32767, not 32768, producing a
+        // symmetric range of -32767..=32767. Do not change to 32768.0 — that
+        // would break byte-level compatibility with the Python server output.
         let scaled = (clipped * 32767.0).round() as i32;
         let clamped = scaled.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
         pcm_s16le.extend_from_slice(&clamped.to_le_bytes());
@@ -231,6 +234,10 @@ type ClipS16Fn = fn(i32) -> i16;
 type PcmToSamplesFn = fn(&[u8]) -> Result<Vec<i16>, AppError>;
 type SamplesToPcmFn = fn(&[i16]) -> Vec<u8>;
 
+// Compile-time signature checks: these `const _:` bindings verify that each
+// crate-private function still matches its declared type alias. They produce
+// a type error at compile time if a function signature drifts from the alias,
+// which acts as a lightweight contract test without any runtime cost.
 const _: Option<AudioBuffer> = None;
 const _: FloatAudioToPcmFn = float_audio_to_pcm;
 const _: NormalizeAudioFn = normalize_audio;

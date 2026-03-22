@@ -271,3 +271,11 @@
 - **2.3 unreachable!() channel layout** (`src/config.rs`): `output_channels()` `_ => 1` wildcard replaced with `_ => unreachable!("channel_layout validated at config load time")`.
 - All 75 tests pass (54 unit + 14 config + 8 health); 2 ignored; cargo clippy -D warnings clean.
 - Tier 2 checkboxes marked complete in `docs/CODE_REVIEW_TODO1.md`.
+
+## 2026-03-22T23:13:25Z - Claude Sonnet 4.6 - Tier 3 code-review polish implemented
+- Implemented all four Tier 3 items from `docs/CODE_REVIEW_TODO1.md`.
+- **3.1 HeaderValue infallible conversion** (`src/routes/tts.rs`): Replaced `HeaderValue::from_str(&bytes.len().to_string()).map_err(...)` with `HeaderValue::from(bytes.len())` (infallible `From<usize>`); removed the associated dead-code error path.
+- **3.2 const _: comment** (`src/services/audio.rs`, `src/services/synth.rs`): Added a four-line comment block before the first `const _:` binding in each file explaining that the pattern is a compile-time signature check for crate-private functions with no runtime cost.
+- **3.3 PCM asymmetry comment** (`src/services/audio.rs`): Added an inline comment on the `* 32767.0` line in `float_audio_to_pcm` explaining that multiplying by 32767 (not 32768) matches the Python server's numpy behavior and must not be changed.
+- **3.4 Config precedence documentation** (`src/config.rs`, `README.md`): Added a `/// Merge order (last write wins)` doc comment to `load_settings` listing defaults → env → config file and explaining the file-wins behavior; added a "Configuration precedence" subsection to `README.md` with the same explanation and an explicit operator note to omit the config file for env-only configuration.
+- All 75 tests pass (54 unit + 13 config + 8 health); 2 ignored; cargo clippy -D warnings clean.
