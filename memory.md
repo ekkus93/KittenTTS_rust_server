@@ -230,3 +230,13 @@
 - Created commit `165892e` (`feat: complete deployment parity and validation`) with the Rust-server deployment artifacts, compatibility test coverage, README/TODO updates, and the clean validation state.
 - Commit `165892e` was created at `2026-03-22T14:57:26-07:00` according to `git log -1 --format="%aI" 165892e`.
 - This interaction also included the requested check-in flow to prepare `master` for pushing to GitHub.
+
+## 2026-03-22T22:12:45Z - GPT-5.4 - Phase 10.3 manual side-by-side validation completed
+- Ran the Rust server on `127.0.0.1:18081` and the Python compatibility server on `127.0.0.1:18082`, then sent matched requests to `/healthz`, `/v1/voices`, `/v1/text-to-speech`, `/v1/text-to-speech/jasper`, `/v1/text-to-speech/not-a-real-voice`, `/v1/text-to-speech/jasper/stream`, and `/v1/audio/speech` for both `wav` and `pcm`.
+- Observed matching success behavior for the compared synthesis routes, matching voice-list JSON shape aside from nested map key order, valid WAV containers from both implementations, and consistent default/explicit/unknown-voice fallback behavior within each implementation.
+- Recorded the manual findings in `README.md`, including the accepted health-route metadata differences (`engine`, `engine_version`, and Rust-only ONNX Runtime fields), non-identical waveform bytes and payload sizes across implementations, and the pseudo-stream header difference seen in this environment.
+
+## 2026-03-22T22:14:54Z - GPT-5.4 - Full Rust validation rerun remains clean after Phase 10.3 docs updates
+- Re-ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features` in `KittenTTS_rust_server` after the manual validation documentation updates.
+- Results were still clean: unit tests `52 passed, 0 failed, 1 ignored`; config integration tests `13 passed, 0 failed, 1 ignored`; health integration tests `8 passed, 0 failed`; doc tests `0 failed`.
+- The worktree at this point contains the expected documentation-only edits in `README.md`, `docs/RUST_PORT_TODO.md`, and `memory.md`.

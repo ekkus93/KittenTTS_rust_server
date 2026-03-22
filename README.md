@@ -51,6 +51,55 @@ cargo check --features real-backend
 cargo test
 ```
 
+## Manual Compatibility Validation
+
+On 2026-03-22, the Rust server and the Python compatibility target were run
+side by side on localhost and exercised with the same request bodies for:
+
+- `GET /healthz`
+- `GET /v1/voices`
+- `POST /v1/text-to-speech`
+- `POST /v1/text-to-speech/jasper`
+- `POST /v1/text-to-speech/not-a-real-voice`
+- `POST /v1/text-to-speech/jasper/stream`
+- `POST /v1/audio/speech` with both `wav` and `pcm`
+
+Observed compatibility points:
+
+- All compared ElevenLabs-style and OpenAI-style synthesis routes returned the
+	same success status codes when given valid request bodies.
+- `GET /v1/voices` returned the same JSON shape and the same voice inventory;
+	the only observed difference was object key ordering inside nested `labels`
+	maps.
+- All successful WAV responses from both implementations were valid RIFF/WAVE
+	PCM audio at 24 kHz mono.
+- The OpenAI `pcm` route returned raw PCM payloads with matching route-level
+	behavior and headers (`content-type: audio/pcm`, `X-Output-Format: pcm`).
+- Default voice routing, explicit `jasper`, and unknown-voice fallback all
+	returned `200` on both servers. Within each implementation, those three
+	requests produced same-sized outputs, which is consistent with the expected
+	fallback-to-default voice behavior.
+
+Intentional or currently accepted differences observed during the manual run:
+
+- `GET /healthz` is not byte-for-byte identical. The Rust server reports
+	`engine: "kitten_tts_rs"`, currently exposes `engine_version: null`, and adds
+	`onnx_runtime_source` plus `onnx_runtime_path`. The Python server reports
+	`engine: "KittenTTS"` and `engine_version: "0.8.1"` without the ONNX Runtime
+	fields.
+- Audio bytes are not identical between the Rust and Python implementations for
+	the same synthesis request, and the resulting payload sizes differ in this
+	environment. The route behavior, media types, and container validity matched,
+	but exact waveform parity was not observed.
+- In this manual run, the Rust pseudo-stream route explicitly responded with
+	chunked transfer encoding, while the Python route returned the same media type
+	and successful body without advertising a matching `Content-Length` header.
+
+The manual OpenAI comparison first surfaced a request-validation mismatch caused
+by using `model: "kitten-local"` in the probe payload. Re-running the same
+requests with the valid OpenAI-compatible model identifier `tts-1` produced
+successful `wav` and `pcm` responses from both implementations.
+
 ## Local Run
 
 Run the compatibility server directly from this repo:

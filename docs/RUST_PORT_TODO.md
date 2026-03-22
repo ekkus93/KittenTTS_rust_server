@@ -536,15 +536,15 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 - [x] Test OpenAI route returns OpenAI-shaped auth errors
 
 ### 10.3 Optional manual validation tasks
-- [ ] Run the Rust service and Python service side by side
-- [ ] Send the same request payloads to both
+- [x] Run the Rust service and Python service side by side
+- [x] Send the same request payloads to both
 - [ ] Compare:
-  - [ ] status codes
-  - [ ] response headers
-  - [ ] JSON shape
-  - [ ] WAV validity
-  - [ ] perceived voice selection behavior
-- [ ] Note any intentional differences in a compatibility section of the README
+  - [x] status codes
+  - [x] response headers
+  - [x] JSON shape
+  - [x] WAV validity
+  - [x] perceived voice selection behavior
+- [x] Note any intentional differences in a compatibility section of the README
 
 ### 10.4 Cleanup and documentation
 - [ ] Add code comments around compatibility-sensitive logic
