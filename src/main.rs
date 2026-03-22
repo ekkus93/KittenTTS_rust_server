@@ -17,9 +17,7 @@ fn main() -> Result<(), kittentts_server_rs::AppError> {
         .enable_all()
         .build()
         .map_err(|err| {
-            kittentts_server_rs::AppError::internal(format!(
-                "failed to build tokio runtime: {err}"
-            ))
+            kittentts_server_rs::AppError::internal(format!("failed to build tokio runtime: {err}"))
         })?
         .block_on(async move {
             init_logging(&settings)?;
