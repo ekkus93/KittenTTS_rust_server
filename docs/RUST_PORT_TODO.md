@@ -140,16 +140,16 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 ## Phase 2 - Port request/response models and error envelopes
 
 ### 2.1 Create public API models
-- [ ] Create Rust equivalent of `VoiceSettings`
-- [ ] Create Rust equivalent of `TTSRequest`
-- [ ] Create Rust equivalent of `OpenAISpeechRequest`
+- [x] Create Rust equivalent of `VoiceSettings`
+- [x] Create Rust equivalent of `TTSRequest`
+- [x] Create Rust equivalent of `OpenAISpeechRequest`
 - [x] Create Rust equivalent of health response
-- [ ] Create Rust equivalent of voice descriptor
-- [ ] Create Rust equivalent of voice list response
+- [x] Create Rust equivalent of voice descriptor
+- [x] Create Rust equivalent of voice list response
 
 ### 2.2 Create internal request model
 - [x] Create `InternalSynthesisRequest`
-- [ ] Include:
+- [x] Include:
   - [x] `text`
   - [x] `voice_id`
   - [x] `model_id`
@@ -159,30 +159,30 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 
 ### 2.3 Create error types
 - [x] Create app error type analogous to `ShimError`
-- [ ] Support:
+- [x] Support:
   - [x] HTTP status code
   - [x] stable app error code string
   - [x] message
-  - [ ] optional details
+  - [x] optional details
 - [x] Create local JSON error envelope
 - [x] Create OpenAI-style error envelope
 
 ### 2.4 Port strict-mode request validation behavior
-- [ ] For ElevenLabs-like routes, support permissive mode
-- [ ] In strict mode, reject unsupported top-level fields
-- [ ] In strict mode, reject unsupported `voice_settings` fields
-- [ ] Preserve current behavior that only `speed` materially affects synthesis
+- [x] For ElevenLabs-like routes, support permissive mode
+- [x] In strict mode, reject unsupported top-level fields
+- [x] In strict mode, reject unsupported `voice_settings` fields
+- [x] Preserve current behavior that only `speed` materially affects synthesis
 
 ### 2.5 Add model/error tests
-- [ ] Test valid request parsing
-- [ ] Test empty text handling
-- [ ] Test OpenAI request validation
-- [ ] Test strict-mode unsupported-field rejection
-- [ ] Test local error envelope shape
-- [ ] Test OpenAI error envelope shape
+- [x] Test valid request parsing
+- [x] Test empty text handling
+- [x] Test OpenAI request validation
+- [x] Test strict-mode unsupported-field rejection
+- [x] Test local error envelope shape
+- [x] Test OpenAI error envelope shape
 
 ### 2.6 Acceptance for Phase 2
-- [ ] JSON contracts are stable
+- [x] JSON contracts are stable
 - [x] Error serialization exists for both compatibility styles
 
 ---

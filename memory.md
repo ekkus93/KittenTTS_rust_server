@@ -26,3 +26,13 @@
 - Ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test` against the current Rust repo state.
 - All validation commands passed successfully with no lint failures and no test failures.
 - Current automated test inventory is 10 passing integration tests total: 9 in `tests/config.rs` and 1 in `tests/health.rs`.
+
+## 2026-03-22T05:19:52Z - GPT-5.4 - Phase 2 model and error layer validated
+- Added the Phase 2 API-model and error-envelope layer: `VoiceSettings`, `TtsRequest`, `OpenAiSpeechRequest`, voice descriptor/list models, richer `AppError` details support, local error details/request IDs, and OpenAI-compatible error serialization.
+- Implemented strict-mode request validation for unsupported top-level and `voice_settings` fields while keeping permissive behavior available for ElevenLabs-style routes and preserving the current behavior that only `speed` materially affects synthesis.
+- Revalidated successfully with `cargo fmt`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test`; the current automated inventory is 18 passing tests total (8 unit tests, 9 config integration tests, 1 health integration test).
+
+## 2026-03-22T05:39:47Z - GPT-5.4 - Validation rerun clean on current tree
+- Ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test` against the current Rust repo state after the latest local edits.
+- All validation commands passed successfully with no formatting failures, lint failures, or test failures.
+- Current automated inventory remains 18 passing tests total: 8 unit tests, 9 config integration tests, and 1 health integration test.
