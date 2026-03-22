@@ -23,7 +23,7 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 ### 0.1 Create the Rust server crate
 - [x] Create a new Rust crate for the HTTP service, for example `kittentts_server_rs`
 - [ ] Decide whether the service is:
-  - [x] a standalone crate with a separate `kitten_tts_rs` dependency boundary (path dependency wiring still pending)
+  - [x] a standalone crate with a separate `kitten_tts_rs` dependency boundary
   - [ ] a Cargo workspace sibling crate
   - [ ] or a single repo with vendored backend code
 - [x] Add a basic `Cargo.toml` with server dependencies
@@ -224,30 +224,30 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 ## Phase 4 - Build the backend adapter around `kitten_tts_rs`
 
 ### 4.1 Create backend abstraction
-- [ ] Define a synthesizer trait or equivalent interface
-- [ ] Include methods for:
-  - [ ] listing voices
-  - [ ] synthesizing audio
-- [ ] Create backend result type that includes:
-  - [ ] audio waveform or PCM buffer
-  - [ ] resolved backend voice
+- [x] Define a synthesizer trait or equivalent interface
+- [x] Include methods for:
+  - [x] listing voices
+  - [x] synthesizing audio
+- [x] Create backend result type that includes:
+  - [x] audio waveform or PCM buffer
+  - [x] resolved backend voice
 
 ### 4.2 Wrap `kitten_tts_rs`
-- [ ] Create a backend adapter in `src/backend/kitten.rs`
-- [ ] Load model
-- [ ] Load voices
-- [ ] Expose voice listing
-- [ ] Expose synthesis
+- [x] Create a backend adapter in `src/backend/kitten.rs`
+- [x] Load model
+- [x] Load voices
+- [x] Expose voice listing
+- [x] Expose synthesis
 
 ### 4.3 Preserve server compatibility behavior inside or around the backend
-- [ ] Ensure the HTTP server uses `clean_text = false`
-- [ ] Ensure style-row selection matches Python:
-  - [ ] use character count of the chunk text
-  - [ ] not token count
-- [ ] Ensure output trim behavior matches Python
-- [ ] Ensure long-text chunking behavior matches Python closely
-- [ ] Ensure punctuation enforcement for chunking matches Python closely
-- [ ] Ensure speed prior behavior remains compatible
+- [x] Ensure the HTTP server uses `clean_text = false`
+- [x] Ensure style-row selection matches Python:
+  - [x] use character count of the chunk text
+  - [x] not token count
+- [x] Ensure output trim behavior matches Python
+- [x] Ensure long-text chunking behavior matches Python closely
+- [x] Ensure punctuation enforcement for chunking matches Python closely
+- [x] Ensure speed prior behavior remains compatible
 
 ### 4.4 Explicitly audit `kitten_tts_rs` behavior against Python KittenTTS
 - [ ] Compare voice alias mapping behavior
@@ -260,22 +260,22 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 - [ ] Add comments or docs for any intentional differences
 
 ### 4.5 Decide how to apply compatibility fixes
-- [ ] Option A: patch/fork `kitten_tts_rs`
+- [x] Option A: patch/fork `kitten_tts_rs`
 - [ ] Option B: keep upstream backend mostly intact and add a compatibility wrapper
-- [ ] Choose one and document it in code comments / README
+- [x] Choose one and document it in code comments / README
 
 ### 4.6 Add backend initialization checks
-- [ ] Fail clearly if ONNX model missing
-- [ ] Fail clearly if `voices.npz` missing
-- [ ] Fail clearly if `espeak-ng` missing
+- [x] Fail clearly if ONNX model missing
+- [x] Fail clearly if `voices.npz` missing
+- [x] Fail clearly if `espeak-ng` missing
 - [ ] Decide whether these are startup-fatal or exposed as unavailable runtime state
 - [ ] Prefer fail-fast unless there is a strong reason not to
 
 ### 4.7 Add backend tests
-- [ ] Unit test voice-name resolution in the backend layer
-- [ ] Unit test style-row selection compatibility helper
-- [ ] Unit test text chunking helper
-- [ ] Unit test punctuation enforcement helper
+- [x] Unit test voice-name resolution in the backend layer
+- [x] Unit test style-row selection compatibility helper
+- [x] Unit test text chunking helper
+- [x] Unit test punctuation enforcement helper
 - [ ] Unit test behavior when `espeak-ng` missing, if feasible
 - [ ] Add at least one integration-style test for actual synthesis if test environment allows model access
 

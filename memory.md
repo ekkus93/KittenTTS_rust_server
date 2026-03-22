@@ -46,3 +46,14 @@
 - Ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test` against the current Rust repo state after the latest local edits in `src/services/voices.rs`.
 - All validation commands passed successfully with no formatting failures, lint failures, or test failures.
 - Current automated inventory remains 23 passing tests total: 13 unit tests, 9 config integration tests, and 1 health integration test.
+
+## 2026-03-22T06:10:24Z - GPT-5.4 - Phase 4 backend foundation implemented
+- Added a single local path dependency from the server crate to the sibling `kitten_tts_rs` repo and implemented the Phase 4 server-side synthesis abstraction in `src/services/synth.rs`, including a typed synthesizer trait, float-audio synth result, and an explicit unavailable-backend runtime.
+- Implemented the real `src/backend/kitten.rs` adapter behind the explicit `real-backend` feature, with clear checks for missing `config.json`, ONNX model files, `voices.npz`, and `espeak-ng`, and documented the choice to keep compatibility-sensitive backend fixes in the local patched backend repo.
+- Patched `kitten_tts_rs` for Python-compatible style-row selection by character count and added backend-side tests for voice-name resolution, style-row selection, chunking, and punctuation helpers.
+- Validation state: the Rust server package passes `cargo clippy --all-targets --no-deps -- -D warnings` and `cargo check`; the sibling `kitten_tts_rs` crate passes `cargo check --all-features`; full test/link runs that build `kitten_tts_rs` test targets are currently blocked in this Linux environment by ONNX Runtime linker errors for missing glibc C23 symbols such as `__isoc23_strtol[l|ll|ull]`.
+
+## 2026-03-22T06:15:53Z - GPT-5.4 - Validation rerun clean on current tree
+- Ran `cargo fmt --all`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test` from `KittenTTS_rust_server` after the latest local edits.
+- All validation commands completed successfully with no formatting failures, lint failures, or test failures.
+- Current automated inventory is 25 passing tests total: 15 unit tests, 9 config integration tests, and 1 health integration test.

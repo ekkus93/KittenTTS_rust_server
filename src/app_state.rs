@@ -21,7 +21,7 @@ impl EngineMetadata {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AppState {
     pub settings: Settings,
     pub engine_metadata: EngineMetadata,

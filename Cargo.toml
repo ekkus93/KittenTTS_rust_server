@@ -13,8 +13,13 @@ path = "src/lib.rs"
 name = "kittentts-server-rs"
 path = "src/main.rs"
 
+[features]
+default = []
+real-backend = ["dep:kitten_tts"]
+
 [dependencies]
 axum = "0.8"
+kitten_tts = { package = "kitten-tts", path = "../kitten_tts_rs", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
