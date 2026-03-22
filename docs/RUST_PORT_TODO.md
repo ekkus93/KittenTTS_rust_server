@@ -528,12 +528,12 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 - [ ] Compare OpenAI route behavior
 
 ### 10.2 Add compatibility-focused tests
-- [ ] Test style-row selection compatibility helper specifically
+- [x] Test style-row selection compatibility helper specifically
 - [ ] Test `clean_text=false` behavior path is used by the HTTP service
-- [ ] Test unknown voice fallback behavior explicitly
+- [x] Test unknown voice fallback behavior explicitly
 - [ ] Test selected voice is logged / carried in request context
 - [ ] Test text length is recorded in request context
-- [ ] Test OpenAI route returns OpenAI-shaped auth errors
+- [x] Test OpenAI route returns OpenAI-shaped auth errors
 
 ### 10.3 Optional manual validation tasks
 - [ ] Run the Rust service and Python service side by side

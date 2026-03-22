@@ -161,3 +161,7 @@
 ## 2026-03-22T12:45:45-07:00 - GPT-5.4 - Route and middleware parity batch pushed
 - Committed and pushed the current Rust server work to `origin/master` as `9abd0c1e3df8104599931c20475a36b9d7446f00` with subject `feat: complete route and middleware parity`.
 - The working tree was clean after push.
+
+## 2026-03-22T19:47:23Z - GPT-5.4 - TODO synced for pushed middleware and validation coverage
+- Updated `docs/RUST_PORT_TODO.md` to mark the compatibility-focused validation items that are now explicitly covered by tests: style-row selection helper coverage, unknown-voice fallback coverage, and OpenAI-shaped auth error coverage.
+- Left broader acceptance items unchanged where behavior is still incomplete or only partially implemented, especially stream-route chunked body semantics, request-context metadata assertions, and deployment/runtime packaging work.
