@@ -279,3 +279,9 @@
 - **3.3 PCM asymmetry comment** (`src/services/audio.rs`): Added an inline comment on the `* 32767.0` line in `float_audio_to_pcm` explaining that multiplying by 32767 (not 32768) matches the Python server's numpy behavior and must not be changed.
 - **3.4 Config precedence documentation** (`src/config.rs`, `README.md`): Added a `/// Merge order (last write wins)` doc comment to `load_settings` listing defaults → env → config file and explaining the file-wins behavior; added a "Configuration precedence" subsection to `README.md` with the same explanation and an explicit operator note to omit the config file for env-only configuration.
 - All 75 tests pass (54 unit + 13 config + 8 health); 2 ignored; cargo clippy -D warnings clean.
+
+## 2026-03-22T23:31:18Z - Claude Sonnet 4.6 - Ported Manual API Smoke Tests section to Rust server README
+- Added a `## Manual API Smoke Tests` section to `README.md` between `## Manual Compatibility Validation` and `## Pseudo-streaming Limits`.
+- Section mirrors the Python server README structure with three subsections: Common checks (healthz, voices), ElevenLabs route checks (default voice, Jasper, pseudo-stream), and OpenAI route checks (WAV, bearer auth, xi-api-key PCM).
+- Includes `aplay`/`ffmpeg` playback notes for the raw PCM output, and a note on how to start the Rust server before running the smoke tests.
+- All curl commands use the same port, voice names, and model identifiers as the Python server equivalents.

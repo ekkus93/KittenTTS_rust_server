@@ -147,6 +147,118 @@ by using `model: "kitten-local"` in the probe payload. Re-running the same
 requests with the valid OpenAI-compatible model identifier `tts-1` produced
 successful `wav` and `pcm` responses from both implementations.
 
+## Manual API Smoke Tests
+
+These examples assume the server is running locally at `http://127.0.0.1:8008`
+with auth disabled. Start the server first:
+
+```bash
+ORT_DYLIB_PATH="$HOME/.local/share/onnxruntime/1.24.2/libonnxruntime.so.1.24.2" \
+  cargo run --release --features real-backend
+```
+
+### Common checks
+
+Health check:
+
+```bash
+curl -sS http://127.0.0.1:8008/healthz
+```
+
+List voices:
+
+```bash
+curl -sS http://127.0.0.1:8008/v1/voices
+```
+
+### ElevenLabs route checks
+
+Synthesize with the default voice route:
+
+```bash
+curl -sS \
+	-H 'Content-Type: application/json' \
+	-o manual-api-default.wav \
+	-X POST http://127.0.0.1:8008/v1/text-to-speech \
+	--data '{"text":"This is the default ElevenLabs route speaking from the local KittenTTS server.","model_id":"kitten-local"}'
+```
+
+Synthesize with an explicit voice ID:
+
+```bash
+curl -sS \
+	-H 'Content-Type: application/json' \
+	-o manual-api-jasper.wav \
+	-X POST http://127.0.0.1:8008/v1/text-to-speech/Jasper \
+	--data '{"text":"Jasper is speaking through the ElevenLabs route with an explicit voice on the local KittenTTS server.","model_id":"kitten-local"}'
+```
+
+Exercise the pseudo-streaming endpoint:
+
+```bash
+curl -sS \
+	-H 'Content-Type: application/json' \
+	-o manual-api-stream.wav \
+	-X POST 'http://127.0.0.1:8008/v1/text-to-speech/Jasper/stream?output_format=wav_24000' \
+	--data '{"text":"Jasper is speaking through the streaming ElevenLabs route on the local KittenTTS server.","model_id":"kitten-local"}'
+```
+
+### OpenAI route checks
+
+Synthesize WAV via the OpenAI-compatible route:
+
+```bash
+curl -sS \
+	-H 'Content-Type: application/json' \
+	-o manual-api-openai-basic.wav \
+	-X POST http://127.0.0.1:8008/v1/audio/speech \
+	--data '{"model":"tts-1","voice":"Jasper","input":"Jasper is speaking through the OpenAI route on the local KittenTTS server.","response_format":"wav"}'
+```
+
+Synthesize WAV with bearer auth (when `auth_enabled` is `true`):
+
+```bash
+curl -sS \
+	-H 'Content-Type: application/json' \
+	-H 'Authorization: Bearer local-dev-key' \
+	-o manual-api-openai-bearer.wav \
+	-X POST http://127.0.0.1:8008/v1/audio/speech \
+	--data '{"model":"tts-1","voice":"Jasper","input":"Jasper is speaking through the bearer-auth OpenAI route on the local KittenTTS server.","response_format":"wav"}'
+```
+
+Synthesize raw PCM with `xi-api-key` auth (when `auth_enabled` is `true`):
+
+```bash
+curl -sS \
+	-H 'Content-Type: application/json' \
+	-H 'xi-api-key: local-dev-key' \
+	-o manual-api-openai-xi-api-key.pcm \
+	-X POST http://127.0.0.1:8008/v1/audio/speech \
+	--data '{"model":"tts-1","voice":"Jasper","input":"Jasper is speaking through the xi-api-key OpenAI route on the local KittenTTS server.","response_format":"pcm"}'
+```
+
+That `.pcm` file is raw signed 16-bit little-endian PCM with no container header.
+With the default server settings (`sample_rate: 24000`, `channel_layout: mono`),
+play it like this:
+
+```bash
+aplay -t raw -f S16_LE -r 24000 -c 1 manual-api-openai-xi-api-key.pcm
+```
+
+Or convert to WAV first:
+
+```bash
+ffmpeg -f s16le -ar 24000 -ac 1 -i manual-api-openai-xi-api-key.pcm manual-api-openai-xi-api-key.wav
+```
+
+If you changed `sample_rate` or `channel_layout` in your runtime config, use those
+values instead of `24000` and `1`.
+
+If auth is enabled, add either `-H 'xi-api-key: <local_api_key>'` or
+`-H 'Authorization: Bearer <local_api_key>'` to the protected `/v1*` requests
+above. If both auth headers are sent, they must carry the same key value;
+conflicting dual-header requests are rejected.
+
 ## Pseudo-streaming Limits
 
 The `/v1/text-to-speech/{voice_id}/stream` route does not perform incremental
