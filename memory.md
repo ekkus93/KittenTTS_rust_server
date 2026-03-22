@@ -36,3 +36,13 @@
 - Ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test` against the current Rust repo state after the latest local edits.
 - All validation commands passed successfully with no formatting failures, lint failures, or test failures.
 - Current automated inventory remains 18 passing tests total: 8 unit tests, 9 config integration tests, and 1 health integration test.
+
+## 2026-03-22T05:51:15Z - GPT-5.4 - Phase 3 voice logic completed
+- Added the Phase 3 voice service layer in `src/services/voices.rs` with Python-matching resolution behavior: exact alias lookup via `voice_map`, case-insensitive direct available-voice matching, and fallback to the configured default voice.
+- Added ElevenLabs-shaped voice descriptor generation with lowercase canonical `voice_id`, alias metadata in `labels`, and Python-matching description text, keeping the logic isolated in the service layer for later `/v1/voices` wiring.
+- Added 5 voice unit tests covering alias preference, case-insensitive direct match, default fallback when the request is missing, fallback for unknown voices, and alias metadata in descriptors; revalidated with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test` for a total of 23 passing tests.
+
+## 2026-03-22T05:52:04Z - GPT-5.4 - Validation rerun clean after latest voice-service edits
+- Ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test` against the current Rust repo state after the latest local edits in `src/services/voices.rs`.
+- All validation commands passed successfully with no formatting failures, lint failures, or test failures.
+- Current automated inventory remains 23 passing tests total: 13 unit tests, 9 config integration tests, and 1 health integration test.

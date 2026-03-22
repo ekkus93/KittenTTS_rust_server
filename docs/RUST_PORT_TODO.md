@@ -190,34 +190,34 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 ## Phase 3 - Port voice logic
 
 ### 3.1 Port voice resolution behavior
-- [ ] Implement case-insensitive available-voice lookup
-- [ ] Implement alias lookup via `voice_map`
-- [ ] Implement default fallback behavior
-- [ ] Preserve Python semantics:
-  - [ ] alias map first
-  - [ ] direct case-insensitive match second
-  - [ ] fallback to default otherwise
+- [x] Implement case-insensitive available-voice lookup
+- [x] Implement alias lookup via `voice_map`
+- [x] Implement default fallback behavior
+- [x] Preserve Python semantics:
+  - [x] alias map first
+  - [x] direct case-insensitive match second
+  - [x] fallback to default otherwise
 
 ### 3.2 Port voice descriptor generation
-- [ ] Build ElevenLabs-shaped descriptors from backend voice list
-- [ ] Include alias metadata
-- [ ] Lowercase canonical `voice_id`
-- [ ] Preserve description format closely
+- [x] Build ElevenLabs-shaped descriptors from backend voice list
+- [x] Include alias metadata
+- [x] Lowercase canonical `voice_id`
+- [x] Preserve description format closely
 
 ### 3.3 Decide and document unknown-voice behavior
-- [ ] Preserve current Python fallback-to-default behavior unless strict mode requires otherwise
-- [ ] Add explicit tests so this does not drift silently
+- [x] Preserve current Python fallback-to-default behavior unless strict mode requires otherwise
+- [x] Add explicit tests so this does not drift silently
 
 ### 3.4 Add voice tests
-- [ ] Test alias preference
-- [ ] Test case-insensitive direct match
-- [ ] Test default fallback when missing
-- [ ] Test default fallback for unknown voice
-- [ ] Test alias metadata appears in voice descriptors
+- [x] Test alias preference
+- [x] Test case-insensitive direct match
+- [x] Test default fallback when missing
+- [x] Test default fallback for unknown voice
+- [x] Test alias metadata appears in voice descriptors
 
 ### 3.5 Acceptance for Phase 3
-- [ ] Voice resolution is compatible with Python behavior
-- [ ] `/v1/voices` can be implemented using this layer
+- [x] Voice resolution is compatible with Python behavior
+- [x] `/v1/voices` can be implemented using this layer
 
 ---
 
