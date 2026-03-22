@@ -200,6 +200,8 @@ pub struct HealthResponse {
     pub engine: String,
     pub engine_version: Option<String>,
     pub model_loaded: bool,
+    pub onnx_runtime_source: Option<String>,
+    pub onnx_runtime_path: Option<String>,
     pub default_voice_id: String,
     pub output_format: String,
     pub sample_rate: u32,

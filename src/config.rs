@@ -16,6 +16,7 @@ pub struct Settings {
     pub port: u16,
     pub auth_enabled: bool,
     pub local_api_key: Option<String>,
+    pub model_dir: Option<PathBuf>,
     pub default_voice_id: String,
     pub default_model_id: String,
     pub voice_map: BTreeMap<String, String>,
@@ -33,6 +34,7 @@ impl Default for Settings {
             port: 8008,
             auth_enabled: false,
             local_api_key: None,
+            model_dir: None,
             default_voice_id: "jasper".to_string(),
             default_model_id: "kitten-local".to_string(),
             voice_map: BTreeMap::new(),
@@ -63,6 +65,14 @@ impl Settings {
             return Err(AppError::invalid_config(
                 "local_api_key must be set when auth_enabled is true",
             ));
+        }
+
+        if self
+            .model_dir
+            .as_ref()
+            .is_some_and(|path| path.as_os_str().is_empty())
+        {
+            return Err(AppError::invalid_config("model_dir must not be empty"));
         }
 
         if self.port == 0 {
@@ -170,6 +180,7 @@ fn environment_overrides() -> Result<Map<String, Value>, AppError> {
 
     insert_string(&mut overrides, "HOST", "host");
     insert_string(&mut overrides, "LOCAL_API_KEY", "local_api_key");
+    insert_string(&mut overrides, "MODEL_DIR", "model_dir");
     insert_string(&mut overrides, "DEFAULT_VOICE_ID", "default_voice_id");
     insert_string(&mut overrides, "DEFAULT_MODEL_ID", "default_model_id");
     insert_string(&mut overrides, "OUTPUT_FORMAT", "output_format");

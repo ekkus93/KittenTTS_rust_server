@@ -238,6 +238,7 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 - [x] Load voices
 - [x] Expose voice listing
 - [x] Expose synthesis
+- [x] Mirror Python-style Hugging Face download-and-cache behavior when `model_dir` is not provided
 
 ### 4.3 Preserve server compatibility behavior inside or around the backend
 - [x] Ensure the HTTP server uses `clean_text = false`
@@ -268,21 +269,21 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 - [x] Fail clearly if ONNX model missing
 - [x] Fail clearly if `voices.npz` missing
 - [x] Fail clearly if `espeak-ng` missing
-- [ ] Decide whether these are startup-fatal or exposed as unavailable runtime state
-- [ ] Prefer fail-fast unless there is a strong reason not to
+- [x] Decide whether these are startup-fatal or exposed as unavailable runtime state
+- [x] Prefer fail-fast unless there is a strong reason not to
 
 ### 4.7 Add backend tests
 - [x] Unit test voice-name resolution in the backend layer
 - [x] Unit test style-row selection compatibility helper
 - [x] Unit test text chunking helper
 - [x] Unit test punctuation enforcement helper
-- [ ] Unit test behavior when `espeak-ng` missing, if feasible
-- [ ] Add at least one integration-style test for actual synthesis if test environment allows model access
+- [x] Unit test behavior when `espeak-ng` missing, if feasible
+- [x] Add at least one integration-style test for actual synthesis if test environment allows model access
 
 ### 4.8 Acceptance for Phase 4
-- [ ] Rust backend can produce speech for a known voice
+- [x] Rust backend can produce speech for a known voice
 - [x] Critical compatibility differences are addressed explicitly
-- [ ] Startup behavior around missing dependencies is clear
+- [x] Startup behavior around missing dependencies is clear
 
 ---
 
@@ -455,16 +456,16 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 
 ### 8.1 Build app state
 - [x] Store validated settings
-- [ ] Store synthesizer service/backend
+- [x] Store synthesizer service/backend
 - [x] Store engine metadata
 - [x] Make app state accessible to routes and middleware
 
 ### 8.2 Port runtime initialization behavior
 - [x] Load settings at startup
 - [x] Initialize logging before serving
-- [ ] Initialize backend before serving
-- [ ] Decide how to represent model-loaded vs unavailable backend
-- [ ] Prefer explicit startup failure for required dependencies
+- [x] Initialize backend before serving
+- [x] Decide how to represent model-loaded vs unavailable backend
+- [x] Prefer explicit startup failure for required dependencies
 
 ### 8.3 Add startup tests if practical
 - [ ] Test startup with valid config
@@ -473,8 +474,8 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 - [ ] Test startup failure with invalid config
 
 ### 8.4 Acceptance for Phase 8
-- [ ] Server boot path is deterministic and clear
-- [ ] Required dependencies are verified early
+- [x] Server boot path is deterministic and clear
+- [x] Required dependencies are verified early
 
 ---
 

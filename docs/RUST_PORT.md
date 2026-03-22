@@ -152,6 +152,12 @@ against the forked `kitten_tts_rs` sources used by this server.
 - The Rust fork avoids Python's `phonemizer` package and calls `espeak-ng` directly, so exact punctuation/stress output is not guaranteed to be identical even though the same system dependency is used.
 - The Rust fork keeps optional preprocessing for standalone use, but the Rust HTTP server must continue to force `clean_text = false` for compatibility with `KittenTTS_server`.
 
+### Model acquisition parity
+
+- Python `kittentts.KittenTTS()` downloads `config.json` first and then fetches the referenced ONNX and `voices.npz` assets through `huggingface_hub`.
+- The Rust fork now mirrors that control flow with direct HTTPS downloads to a local Hugging Face-style cache path when the server does not provide an explicit `model_dir` override.
+- Cache root precedence is `HF_HOME`, then `XDG_CACHE_HOME`, then `HOME/.cache/huggingface/hub`, with an OS temp-directory fallback as a last resort.
+
 ---
 
 ## Current Python server architecture
@@ -742,6 +748,8 @@ The Rust `/healthz` route should include analogous data to the Python server:
 - `engine`
 - `engine_version`
 - `model_loaded`
+- `onnx_runtime_source`
+- `onnx_runtime_path`
 - `default_voice_id`
 - `output_format`
 - `sample_rate`

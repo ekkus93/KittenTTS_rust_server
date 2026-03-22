@@ -1,8 +1,11 @@
+#[cfg(feature = "real-backend")]
+use crate::backend::kitten::{KittenBackend, OrtRuntimeMetadata};
 use crate::config::Settings;
 use crate::error::{AppError, AppErrorCode};
 use crate::models::internal::InternalSynthesisRequest;
 use axum::http::StatusCode;
 use std::collections::BTreeSet;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 #[cfg(feature = "real-backend")]
@@ -35,6 +38,8 @@ pub(crate) struct SynthRuntime {
     engine_name: String,
     engine_version: Option<String>,
     model_loaded: bool,
+    onnx_runtime_source: Option<String>,
+    onnx_runtime_path: Option<PathBuf>,
 }
 
 impl SynthRuntime {
@@ -52,6 +57,14 @@ impl SynthRuntime {
 
     pub(crate) fn model_loaded(&self) -> bool {
         self.model_loaded
+    }
+
+    pub(crate) fn onnx_runtime_source(&self) -> Option<&str> {
+        self.onnx_runtime_source.as_deref()
+    }
+
+    pub(crate) fn onnx_runtime_path(&self) -> Option<&PathBuf> {
+        self.onnx_runtime_path.as_ref()
     }
 }
 
@@ -102,15 +115,46 @@ pub(crate) fn unavailable_runtime(settings: &Settings) -> SynthRuntime {
         engine_name: "kitten_tts_rs".to_string(),
         engine_version: None,
         model_loaded: false,
+        onnx_runtime_source: None,
+        onnx_runtime_path: None,
+    }
+}
+
+pub(crate) fn create_synth_runtime(settings: &Settings) -> Result<SynthRuntime, AppError> {
+    #[cfg(feature = "real-backend")]
+    {
+        let (backend, ort_runtime): (KittenBackend, OrtRuntimeMetadata) =
+            KittenBackend::from_settings(settings)?;
+        Ok(SynthRuntime {
+            synthesizer: Arc::new(backend),
+            engine_name: "kitten_tts_rs".to_string(),
+            engine_version: None,
+            model_loaded: true,
+            onnx_runtime_source: Some(ort_runtime.source.to_string()),
+            onnx_runtime_path: ort_runtime.path,
+        })
+    }
+
+    #[cfg(not(feature = "real-backend"))]
+    {
+        let _ = settings;
+        Err(AppError::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            AppErrorCode::BackendUnavailable,
+            "server was built without the real-backend feature; rebuild with `--features real-backend`",
+        ))
     }
 }
 
 type DiscoverStubVoicesFn = fn(&Settings) -> Vec<String>;
 type UnavailableRuntimeFn = fn(&Settings) -> SynthRuntime;
+type CreateRuntimeFn = fn(&Settings) -> Result<SynthRuntime, AppError>;
 type RuntimeSynthesizerFn = fn(&SynthRuntime) -> Arc<dyn Synthesizer>;
 type RuntimeEngineNameFn = fn(&SynthRuntime) -> &str;
 type RuntimeEngineVersionFn = fn(&SynthRuntime) -> Option<&str>;
 type RuntimeModelLoadedFn = fn(&SynthRuntime) -> bool;
+type RuntimeOnnxSourceFn = fn(&SynthRuntime) -> Option<&str>;
+type RuntimeOnnxPathFn = fn(&SynthRuntime) -> Option<&PathBuf>;
 type UnavailableListVoicesFn = fn(&UnavailableSynthesizer) -> Vec<String>;
 type UnavailableSynthesizeFn =
     fn(&UnavailableSynthesizer, &InternalSynthesisRequest) -> Result<SynthResult, AppError>;
@@ -121,10 +165,13 @@ const _: Option<SynthRuntime> = None;
 const _: Option<UnavailableSynthesizer> = None;
 const _: DiscoverStubVoicesFn = discover_stub_voices;
 const _: UnavailableRuntimeFn = unavailable_runtime;
+const _: CreateRuntimeFn = create_synth_runtime;
 const _: RuntimeSynthesizerFn = SynthRuntime::synthesizer;
 const _: RuntimeEngineNameFn = SynthRuntime::engine_name;
 const _: RuntimeEngineVersionFn = SynthRuntime::engine_version;
 const _: RuntimeModelLoadedFn = SynthRuntime::model_loaded;
+const _: RuntimeOnnxSourceFn = SynthRuntime::onnx_runtime_source;
+const _: RuntimeOnnxPathFn = SynthRuntime::onnx_runtime_path;
 const _: UnavailableListVoicesFn = <UnavailableSynthesizer as Synthesizer>::list_voices;
 const _: UnavailableSynthesizeFn = <UnavailableSynthesizer as Synthesizer>::synthesize;
 
@@ -166,5 +213,17 @@ mod tests {
         assert_eq!(synthesizer.list_voices(), vec!["jasper".to_string()]);
         assert_eq!(error.code, AppErrorCode::BackendUnavailable);
         assert_eq!(error.message, "backend offline");
+    }
+
+    #[cfg(not(feature = "real-backend"))]
+    #[test]
+    fn create_synth_runtime_fails_fast_without_real_backend_feature() {
+        let error = match create_synth_runtime(&Settings::default()) {
+            Ok(_) => panic!("expected fail-fast startup error without real-backend feature"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.code, AppErrorCode::BackendUnavailable);
+        assert!(error.message.contains("real-backend"));
     }
 }

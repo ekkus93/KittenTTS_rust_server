@@ -14,6 +14,7 @@ const TEST_ENV_KEYS: &[&str] = &[
     "KITTENTTS_SERVER_PORT",
     "KITTENTTS_SERVER_AUTH_ENABLED",
     "KITTENTTS_SERVER_LOCAL_API_KEY",
+    "KITTENTTS_SERVER_MODEL_DIR",
     "KITTENTTS_SERVER_DEFAULT_VOICE_ID",
     "KITTENTTS_SERVER_DEFAULT_MODEL_ID",
     "KITTENTTS_SERVER_VOICE_MAP",
@@ -42,6 +43,7 @@ fn loads_settings_from_json_config_file() {
             "port": 9001,
             "auth_enabled": true,
             "local_api_key": "secret",
+            "model_dir": "/srv/kitten/model",
             "default_voice_id": "luna",
             "default_model_id": "kitten-custom",
             "voice_map": {"narrator": "jasper"},
@@ -59,6 +61,7 @@ fn loads_settings_from_json_config_file() {
     assert_eq!(settings.port, 9001);
     assert!(settings.auth_enabled);
     assert_eq!(settings.local_api_key.as_deref(), Some("secret"));
+    assert_eq!(settings.model_dir, Some(PathBuf::from("/srv/kitten/model")));
     assert_eq!(settings.default_voice_id, "luna");
     assert_eq!(settings.default_model_id, "kitten-custom");
     assert_eq!(
@@ -99,6 +102,7 @@ fn loads_environment_overrides_without_config_file() {
     env::set_var("KITTENTTS_SERVER_PORT", "9100");
     env::set_var("KITTENTTS_SERVER_AUTH_ENABLED", "true");
     env::set_var("KITTENTTS_SERVER_LOCAL_API_KEY", "env-secret");
+    env::set_var("KITTENTTS_SERVER_MODEL_DIR", "/opt/kitten/model");
     env::set_var("KITTENTTS_SERVER_DEFAULT_VOICE_ID", "bruno");
     env::set_var("KITTENTTS_SERVER_DEFAULT_MODEL_ID", "env-model");
     env::set_var("KITTENTTS_SERVER_VOICE_MAP", r#"{"alias":"bella"}"#);
@@ -114,6 +118,7 @@ fn loads_environment_overrides_without_config_file() {
     assert_eq!(settings.port, 9100);
     assert!(settings.auth_enabled);
     assert_eq!(settings.local_api_key.as_deref(), Some("env-secret"));
+    assert_eq!(settings.model_dir, Some(PathBuf::from("/opt/kitten/model")));
     assert_eq!(settings.default_voice_id, "bruno");
     assert_eq!(settings.default_model_id, "env-model");
     assert_eq!(
@@ -193,6 +198,16 @@ fn rejects_invalid_log_level() {
     assert!(error
         .message
         .contains("log_level must be one of CRITICAL, ERROR, WARNING, INFO, DEBUG"));
+}
+
+#[test]
+fn rejects_empty_model_dir() {
+    let _guard = env_guard();
+    env::set_var("KITTENTTS_SERVER_MODEL_DIR", "");
+
+    let error = load_settings(None).unwrap_err();
+
+    assert!(error.message.contains("model_dir must not be empty"));
 }
 
 struct EnvResetGuard {
