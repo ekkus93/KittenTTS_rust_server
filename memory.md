@@ -334,3 +334,8 @@
 - Removed the two host-dependent ignored tests from `tests/config.rs` and `src/backend/kitten.rs` because they only exercised local runtime availability and were not reliable CI coverage.
 - Added deterministic `src/app_state.rs` unit tests around startup wiring via an injected runtime factory so the success path and error propagation are both exercised without mocking fake behavior at the HTTP layer.
 - Revalidated `KittenTTS_rust_server` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`; results are now `56 passed, 0 failed, 0 ignored` unit tests, `13 passed, 0 failed, 0 ignored` config integration tests, and `8 passed, 0 failed` health integration tests.
+
+## 2026-03-28T12:55:48Z - GPT-5.4 - Added request-context and logging unit coverage
+- Added direct unit tests in `src/middleware/request_context.rs` for local error request-id injection, OpenAI error-envelope preservation, `error_code` capture, and the setter helpers that populate selected voice and text length.
+- Added direct unit tests in `src/logging.rs` for Python-style log-level mapping and the fail-fast behavior when `init_logging` is called more than once in the same process.
+- Revalidated `KittenTTS_rust_server` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`; results are now `61 passed, 0 failed, 0 ignored` unit tests, `13 passed, 0 failed` config integration tests, and `8 passed, 0 failed` health integration tests.

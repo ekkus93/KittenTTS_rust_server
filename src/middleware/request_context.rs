@@ -206,3 +206,102 @@ fn log_request_event(
         ),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::{AppError, AppErrorCode, OpenAiErrorBody};
+    use axum::body::to_bytes;
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+    use axum::Json;
+
+    fn test_context() -> SharedRequestContext {
+        Arc::new(Mutex::new(RequestContext {
+            request_id: "req-123".to_string(),
+            selected_voice: None,
+            text_length: None,
+            error_code: None,
+        }))
+    }
+
+    #[tokio::test]
+    async fn enrich_error_response_injects_request_id_into_local_errors() {
+        let context = test_context();
+        let response = AppError::new(
+            StatusCode::BAD_REQUEST,
+            AppErrorCode::Validation,
+            "bad request",
+        )
+        .into_response();
+
+        let response = enrich_error_response("/v1/text-to-speech", &context, response).await;
+
+        assert_eq!(response.headers().get(CONTENT_LENGTH), None);
+        assert_eq!(request_id(&context), "req-123");
+        assert_eq!(
+            with_context(&context, |request_context| request_context
+                .error_code
+                .clone()),
+            Some("validation_error".to_string())
+        );
+
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let envelope: LocalErrorEnvelope = serde_json::from_slice(&body).unwrap();
+        assert_eq!(envelope.error.code, "validation_error");
+        assert_eq!(envelope.error.request_id.as_deref(), Some("req-123"));
+    }
+
+    #[tokio::test]
+    async fn enrich_error_response_preserves_openai_error_shape() {
+        let context = test_context();
+        let original = OpenAiErrorEnvelope {
+            error: OpenAiErrorBody {
+                code: Some("authentication_failed".to_string()),
+                message: "Missing or invalid API key".to_string(),
+                error_type: "invalid_request_error".to_string(),
+            },
+        };
+        let response = (StatusCode::UNAUTHORIZED, Json(&original)).into_response();
+
+        let response = enrich_error_response("/v1/audio/speech", &context, response).await;
+
+        assert_eq!(response.headers().get(CONTENT_LENGTH), None);
+        assert_eq!(
+            with_context(&context, |request_context| request_context
+                .error_code
+                .clone()),
+            Some("authentication_failed".to_string())
+        );
+
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let envelope: OpenAiErrorEnvelope = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            envelope.error.code.as_deref(),
+            Some("authentication_failed")
+        );
+        assert_eq!(envelope.error.message, original.error.message);
+        assert_eq!(envelope.error.error_type, original.error.error_type);
+    }
+
+    #[test]
+    fn setter_helpers_update_request_context_fields() {
+        let context = test_context();
+
+        set_selected_voice(&context, "jasper");
+        set_text_length(&context, 42);
+        set_error_code(&context, "backend_unavailable");
+
+        let snapshot = with_context(&context, |request_context| {
+            (
+                request_context.selected_voice.clone(),
+                request_context.text_length,
+                request_context.error_code.clone(),
+            )
+        });
+
+        assert_eq!(snapshot.0.as_deref(), Some("jasper"));
+        assert_eq!(snapshot.1, Some(42));
+        assert_eq!(snapshot.2.as_deref(), Some("backend_unavailable"));
+    }
+}
