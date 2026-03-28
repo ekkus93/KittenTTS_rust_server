@@ -18,6 +18,16 @@ fn auth_enabled_state() -> AppState {
     )
 }
 
+fn tts_test_state(settings: Settings) -> AppState {
+    AppState::new_test_synth(
+        settings,
+        vec!["Jasper".to_string(), "Bella".to_string()],
+        vec![0.0, 0.25, -0.25, 0.5, -0.5, 0.75],
+        24_000,
+        1,
+    )
+}
+
 #[tokio::test]
 async fn health_route_returns_server_metadata() {
     let mut engine_metadata = EngineMetadata::new("kitten_tts_rs", "0.1.0", false);
@@ -330,5 +340,78 @@ async fn non_v1_unknown_path_is_not_auth_protected_and_returns_not_found() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert!(response.headers().get("X-Request-Id").is_some());
+}
+
+#[tokio::test]
+async fn text_to_speech_response_sets_wav_headers_and_content_length() {
+    let app = build_router(tts_test_state(Settings::default()));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/text-to-speech")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"text":"hello headers"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "audio/wav");
+    assert_eq!(response.headers()["x-output-format"], "wav");
+    assert!(response.headers().get("content-length").is_some());
+    assert!(response.headers().get("X-Request-Id").is_some());
+}
+
+#[tokio::test]
+async fn openai_pcm_response_sets_pcm_headers_and_content_length() {
+    let app = build_router(tts_test_state(Settings::default()));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/audio/speech")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"model":"tts-1","voice":"Bella","input":"hello pcm","response_format":"pcm"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "audio/pcm");
+    assert_eq!(response.headers()["x-output-format"], "pcm");
+    assert!(response.headers().get("content-length").is_some());
+    assert!(response.headers().get("X-Request-Id").is_some());
+}
+
+#[tokio::test]
+async fn stream_tts_response_omits_content_length_and_keeps_stream_headers() {
+    let app = build_router(tts_test_state(Settings::default()));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/text-to-speech/Bella/stream")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"text":"hello stream headers","output_format":"pcm_16000"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "audio/pcm");
+    assert_eq!(response.headers()["x-output-format"], "pcm_16000");
+    assert!(response.headers().get("content-length").is_none());
     assert!(response.headers().get("X-Request-Id").is_some());
 }

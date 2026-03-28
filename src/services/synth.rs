@@ -68,7 +68,6 @@ impl SynthRuntime {
     }
 }
 
-#[cfg(test)]
 pub(crate) fn test_runtime<S>(synthesizer: S) -> SynthRuntime
 where
     S: Synthesizer + 'static,
@@ -173,7 +172,6 @@ type RuntimeOnnxPathFn = fn(&SynthRuntime) -> Option<&PathBuf>;
 type UnavailableListVoicesFn = fn(&UnavailableSynthesizer) -> Vec<String>;
 type UnavailableSynthesizeFn =
     fn(&UnavailableSynthesizer, &InternalSynthesisRequest) -> Result<SynthResult, AppError>;
-#[cfg(test)]
 type TestRuntimeFn = fn(UnavailableSynthesizer) -> SynthRuntime;
 
 // Compile-time signature checks: these `const _:` bindings verify that each
@@ -195,7 +193,6 @@ const _: RuntimeOnnxSourceFn = SynthRuntime::onnx_runtime_source;
 const _: RuntimeOnnxPathFn = SynthRuntime::onnx_runtime_path;
 const _: UnavailableListVoicesFn = <UnavailableSynthesizer as Synthesizer>::list_voices;
 const _: UnavailableSynthesizeFn = <UnavailableSynthesizer as Synthesizer>::synthesize;
-#[cfg(test)]
 const _: TestRuntimeFn = test_runtime::<UnavailableSynthesizer>;
 
 #[cfg(test)]

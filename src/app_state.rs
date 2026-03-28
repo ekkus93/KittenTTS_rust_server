@@ -1,7 +1,36 @@
 use crate::config::Settings;
 use crate::error::AppError;
-use crate::services::synth::{create_synth_runtime, unavailable_runtime, SynthRuntime};
+use crate::models::internal::InternalSynthesisRequest;
+use crate::services::synth::{
+    create_synth_runtime, test_runtime, unavailable_runtime, FloatAudioBuffer, SynthResult,
+    SynthRuntime, Synthesizer,
+};
 use std::path::PathBuf;
+
+#[derive(Clone)]
+struct FixedTestSynthesizer {
+    available_voices: Vec<String>,
+    waveform: Vec<f32>,
+    sample_rate: u32,
+    channels: u16,
+}
+
+impl Synthesizer for FixedTestSynthesizer {
+    fn list_voices(&self) -> Vec<String> {
+        self.available_voices.clone()
+    }
+
+    fn synthesize(&self, request: &InternalSynthesisRequest) -> Result<SynthResult, AppError> {
+        Ok(SynthResult {
+            audio: FloatAudioBuffer {
+                waveform: self.waveform.clone(),
+                sample_rate: self.sample_rate,
+                channels: self.channels,
+            },
+            voice: request.voice_id.clone().unwrap_or_default(),
+        })
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct EngineMetadata {
@@ -54,6 +83,24 @@ impl AppState {
             engine_metadata,
             synth_runtime,
         }
+    }
+
+    #[doc(hidden)]
+    pub fn new_test_synth(
+        settings: Settings,
+        available_voices: Vec<String>,
+        waveform: Vec<f32>,
+        sample_rate: u32,
+        channels: u16,
+    ) -> Self {
+        let synthesizer = FixedTestSynthesizer {
+            available_voices,
+            waveform,
+            sample_rate,
+            channels,
+        };
+
+        Self::from_runtime(settings, test_runtime(synthesizer))
     }
 
     pub(crate) fn from_runtime(settings: Settings, synth_runtime: SynthRuntime) -> Self {
