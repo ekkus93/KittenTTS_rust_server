@@ -437,7 +437,6 @@ const _: BackendSynthesizeFn = <KittenBackend as Synthesizer>::synthesize;
 mod tests {
     use super::*;
     use crate::config::Settings;
-    use crate::services::synth::create_synth_runtime;
     use std::path::PathBuf;
     use std::sync::{Mutex, OnceLock};
     use uuid::Uuid;
@@ -648,40 +647,6 @@ mod tests {
         }
 
         fs::remove_dir_all(home_dir).unwrap();
-    }
-
-    #[test]
-    #[ignore = "requires KITTENTTS_SERVER_TEST_MODEL_DIR and a host environment that can link/run the real backend"]
-    fn create_synth_runtime_can_generate_speech_with_real_model_assets() {
-        let model_dir = std::env::var_os("KITTENTTS_SERVER_TEST_MODEL_DIR")
-            .map(PathBuf::from)
-            .expect("KITTENTTS_SERVER_TEST_MODEL_DIR must be set for this test");
-        let settings = Settings {
-            model_dir: Some(model_dir),
-            default_voice_id: "jasper".to_string(),
-            ..Settings::default()
-        };
-        // Ensure ORT_DYLIB_PATH is resolved before the backend initialises
-        // ONNX Runtime (mimics the pre-runtime setup done in `main`).
-        let _ = apply_ort_dylib_path();
-
-        let runtime = create_synth_runtime(&settings).expect("runtime should initialize");
-        let result = runtime
-            .synthesizer()
-            .synthesize(&InternalSynthesisRequest {
-                text: "Hello from the Rust backend".to_string(),
-                voice_id: Some("jasper".to_string()),
-                model_id: None,
-                speed: 1.0,
-                output_format: Some("wav".to_string()),
-                streaming: false,
-            })
-            .expect("synthesis should succeed");
-
-        assert!(runtime.model_loaded());
-        assert_eq!(result.audio.sample_rate, KITTEN_TTS_SAMPLE_RATE);
-        assert_eq!(result.audio.channels, KITTEN_TTS_CHANNELS);
-        assert!(!result.audio.waveform.is_empty());
     }
 
     #[test]

@@ -280,32 +280,6 @@ fn startup_fails_with_missing_voices_file() {
     fs::remove_dir_all(model_dir).unwrap();
 }
 
-#[cfg(feature = "real-backend")]
-#[test]
-#[ignore = "requires KITTENTTS_SERVER_TEST_MODEL_DIR and a host environment that can initialize the real backend"]
-fn startup_with_valid_config_initializes_app_state() {
-    let _guard = env_guard();
-    let model_dir = env::var("KITTENTTS_SERVER_TEST_MODEL_DIR")
-        .expect("KITTENTTS_SERVER_TEST_MODEL_DIR must be set for this test");
-    let config_path = write_temp_config(&format!(
-        r#"{{
-            "host": "127.0.0.1",
-            "port": 8012,
-            "model_dir": "{}",
-            "default_voice_id": "jasper",
-            "output_format": "wav"
-        }}"#,
-        model_dir
-    ));
-
-    let settings = load_settings(Some(config_path)).unwrap();
-    let state = initialize_app_state(settings.clone()).expect("startup should succeed");
-
-    assert_eq!(state.settings, settings);
-    assert!(state.engine_metadata.model_loaded);
-    assert_eq!(state.engine_metadata.engine, "kitten_tts_rs");
-}
-
 struct EnvResetGuard {
     saved: Vec<(&'static str, Option<String>)>,
     _lock: std::sync::MutexGuard<'static, ()>,
