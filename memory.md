@@ -339,3 +339,34 @@
 - Added direct unit tests in `src/middleware/request_context.rs` for local error request-id injection, OpenAI error-envelope preservation, `error_code` capture, and the setter helpers that populate selected voice and text length.
 - Added direct unit tests in `src/logging.rs` for Python-style log-level mapping and the fail-fast behavior when `init_logging` is called more than once in the same process.
 - Revalidated `KittenTTS_rust_server` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`; results are now `61 passed, 0 failed, 0 ignored` unit tests, `13 passed, 0 failed` config integration tests, and `8 passed, 0 failed` health integration tests.
+
+## 2026-03-28T13:26:35Z - GPT-5.4 - Added startup-orchestration and config helper coverage
+- Refactored `src/main.rs` into small startup helpers (`run`, `build_runtime_with`, `initialize_state_with`, `bind_listener`) so process orchestration can be unit tested without weakening the production startup path.
+- Added direct unit tests in `src/main.rs` for runtime-builder failure mapping, backend init error propagation, join-failure mapping, listener bind failure, and successful initialized-state return.
+- Added direct unit tests in `src/config.rs` for `selected_config_path`, `parse_bool`, and `output_channels`, using a guarded temp-dir/env setup so precedence behavior stays deterministic.
+- Revalidated `KittenTTS_rust_server` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`; results are now `72 passed, 0 failed, 0 ignored` unit tests, `13 passed, 0 failed` config integration tests, and `8 passed, 0 failed` health integration tests.
+
+## 2026-03-28T13:34:16Z - GPT-5.4 - Added direct auth middleware edge-case coverage
+- Added focused direct unit tests in `src/middleware/auth.rs` for case-insensitive bearer parsing, whitespace-trimmed tokens, ignored non-bearer authorization headers, ignored blank API-key headers, exact public/OpenAI route classification, and explicit `is_request_authorized` behavior when auth is enabled or disabled.
+- Kept the change test-only after a first failing assertion showed the current contract leaves `/healthz/extra` unprotected because only exact public paths are exempt and only `/v1...` paths are protected.
+- Revalidated `KittenTTS_rust_server` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`; results are now `73 passed, 0 failed, 0 ignored` unit tests, `13 passed, 0 failed` config integration tests, and `8 passed, 0 failed` health integration tests.
+
+## 2026-03-28T13:41:17Z - GPT-5.4 - Added direct TTS format-negotiation coverage
+- Added focused direct unit tests in `src/routes/tts.rs` for `normalize_output_format`, `negotiate_output_format`, `supported_stream_format`, and `negotiate_stream_format`, covering trimming/lowercasing, blank-value handling, WAV variant acceptance, non-strict fallback behavior, strict-mode rejection, explicit sample-rate parsing, and rejection of unsupported containers/sample rates.
+- Kept the route-level tests in place and used the new direct tests to lock down helper semantics without changing any HTTP behavior.
+- Revalidated `KittenTTS_rust_server` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`; results are now `80 passed, 0 failed, 0 ignored` unit tests, `13 passed, 0 failed` config integration tests, and `8 passed, 0 failed` health integration tests.
+
+## 2026-03-28T13:49:45Z - GPT-5.4 - Added small voices-service edge-case coverage
+- Added focused direct unit tests in `src/services/voices.rs` for blank requested voice handling, alias-first resolution when the mapped target is not present in the available voices list, and descriptor deduplication/sorting behavior when available voices differ only by case.
+- Kept the batch helper-focused and test-only, extending the existing alias/default resolution coverage without changing service behavior.
+- Revalidated `KittenTTS_rust_server` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`; results are now `83 passed, 0 failed, 0 ignored` unit tests, `13 passed, 0 failed` config integration tests, and `8 passed, 0 failed` health integration tests.
+
+## 2026-03-28T13:52:37Z - GPT-5.4 - Added small API-model helper coverage
+- Added focused direct unit tests in `src/models/api.rs` for non-strict-mode acceptance of extra fields, trimmed request normalization, default speed/output-format behavior in `TtsRequest`, default WAV/speed behavior in `OpenAiSpeechRequest`, and rejection of blank OpenAI input after trimming.
+- Kept the batch helper-focused and test-only, extending the existing model validation coverage without touching route or middleware behavior.
+- Revalidated `KittenTTS_rust_server` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`; results are now `87 passed, 0 failed, 0 ignored` unit tests, `13 passed, 0 failed` config integration tests, and `8 passed, 0 failed` health integration tests.
+
+## 2026-03-28T13:59:34Z - GPT-5.4 - Added small audio-helper validation coverage
+- Added focused direct unit tests in `src/services/audio.rs` for zero source sample-rate rejection in `float_audio_to_pcm`, invalid target sample-rate/channel rejection in `normalize_audio`, and serialize-time validation failures for unsupported audio metadata.
+- Kept the batch helper-focused and test-only, extending the existing audio conversion coverage with the remaining validation branches rather than broader integration behavior.
+- Revalidated `KittenTTS_rust_server` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`; results are now `90 passed, 0 failed, 0 ignored` unit tests, `13 passed, 0 failed` config integration tests, and `8 passed, 0 failed` health integration tests.

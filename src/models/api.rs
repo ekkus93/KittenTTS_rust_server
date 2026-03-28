@@ -334,4 +334,75 @@ mod tests {
         );
         assert!(error.details.contains_key("fields"));
     }
+
+    #[test]
+    fn non_strict_mode_allows_extra_fields_and_preserves_trimmed_request_values() {
+        let payload = json!({
+            "text": "  hello  ",
+            "output_format": "  PCM_16000  ",
+            "unknown_field": true,
+            "voice_settings": {
+                "speed": 1.1,
+                "experimental": true
+            }
+        });
+
+        let request: TtsRequest = serde_json::from_value(payload).unwrap();
+        let internal = request
+            .to_internal_request(Some("bella"), false, true)
+            .unwrap();
+
+        assert_eq!(internal.text, "hello");
+        assert_eq!(internal.voice_id.as_deref(), Some("bella"));
+        assert_eq!(internal.speed, 1.1);
+        assert_eq!(internal.output_format.as_deref(), Some("pcm_16000"));
+        assert!(internal.streaming);
+    }
+
+    #[test]
+    fn tts_request_defaults_speed_and_preserves_blank_output_format_for_later_normalization() {
+        let request = TtsRequest {
+            text: "hello".to_string(),
+            output_format: Some("   ".to_string()),
+            ..TtsRequest::default()
+        };
+
+        let internal = request.to_internal_request(None, false, false).unwrap();
+
+        assert_eq!(internal.speed, 1.0);
+        assert_eq!(internal.output_format.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn openai_request_defaults_speed_and_response_format_to_wav() {
+        let payload = json!({
+            "model": "gpt-4o-mini-tts",
+            "voice": "bella",
+            "input": "Hello there"
+        });
+
+        let request: OpenAiSpeechRequest = serde_json::from_value(payload).unwrap();
+        let internal = request.to_internal_request().unwrap();
+
+        assert_eq!(internal.model_id.as_deref(), Some("gpt-4o-mini-tts"));
+        assert_eq!(internal.output_format.as_deref(), Some("wav"));
+        assert_eq!(internal.speed, 1.0);
+        assert!(!internal.streaming);
+    }
+
+    #[test]
+    fn openai_request_rejects_blank_input_after_trimming() {
+        let request = OpenAiSpeechRequest {
+            model: OpenAiModel::Tts1,
+            voice: "bella".to_string(),
+            input: "   ".to_string(),
+            response_format: None,
+            speed: None,
+        };
+
+        let error = request.to_internal_request().unwrap_err();
+
+        assert_eq!(error.code, AppErrorCode::MissingInput);
+        assert_eq!(error.message, "input is required");
+    }
 }

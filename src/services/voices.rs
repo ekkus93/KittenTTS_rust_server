@@ -191,6 +191,30 @@ mod tests {
     }
 
     #[test]
+    fn resolve_voice_treats_blank_requests_as_missing() {
+        let resolved = resolve_voice(
+            Some(""),
+            &BTreeMap::new(),
+            &available_voices(&["Jasper", "Bella"]),
+            "bella",
+        );
+
+        assert_eq!(resolved, "Bella");
+    }
+
+    #[test]
+    fn resolve_voice_returns_alias_target_when_mapped_voice_is_not_available() {
+        let resolved = resolve_voice(
+            Some("Narrator"),
+            &voice_map(&[("Narrator", "CustomVoice")]),
+            &available_voices(&["Jasper", "Bella"]),
+            "jasper",
+        );
+
+        assert_eq!(resolved, "CustomVoice");
+    }
+
+    #[test]
     fn build_voice_descriptors_includes_alias_metadata() {
         let descriptors = build_voice_descriptors(
             &available_voices(&["Bella", "Jasper"]),
@@ -222,5 +246,23 @@ mod tests {
             descriptors[0].description.as_deref(),
             Some("Local KittenTTS voice Bella. Also reachable via aliases: fallback, friendly.")
         );
+    }
+
+    #[test]
+    fn build_voice_descriptors_deduplicates_and_sorts_case_insensitively() {
+        let descriptors = build_voice_descriptors(
+            &available_voices(&["bella", "Jasper", "Bella", "jasper"]),
+            &BTreeMap::new(),
+        );
+
+        let descriptor_names = descriptors
+            .iter()
+            .map(|descriptor| descriptor.name.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(descriptor_names, vec!["Bella", "bella", "Jasper", "jasper"]);
+        assert!(descriptors
+            .iter()
+            .all(|descriptor| !descriptor.labels.contains_key("aliases")));
     }
 }

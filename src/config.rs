@@ -272,3 +272,131 @@ fn parse_json_mapping(value: &str, env_name: &str) -> Result<BTreeMap<String, St
         ))
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Mutex, OnceLock};
+
+    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    static UNIQUE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    struct EnvResetGuard {
+        saved_config_file: Option<String>,
+        saved_cwd: PathBuf,
+        temp_dir: Option<PathBuf>,
+        _lock: std::sync::MutexGuard<'static, ()>,
+    }
+
+    impl Drop for EnvResetGuard {
+        fn drop(&mut self) {
+            match &self.saved_config_file {
+                Some(value) => env::set_var(format!("{ENV_PREFIX}CONFIG_FILE"), value),
+                None => env::remove_var(format!("{ENV_PREFIX}CONFIG_FILE")),
+            }
+            env::set_current_dir(&self.saved_cwd).unwrap();
+            if let Some(temp_dir) = &self.temp_dir {
+                let _ = fs::remove_dir_all(temp_dir);
+            }
+        }
+    }
+
+    fn env_guard() -> EnvResetGuard {
+        let lock = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+        EnvResetGuard {
+            saved_config_file: env::var(format!("{ENV_PREFIX}CONFIG_FILE")).ok(),
+            saved_cwd: env::current_dir().unwrap(),
+            temp_dir: None,
+            _lock: lock,
+        }
+    }
+
+    fn unique_temp_dir(label: &str) -> PathBuf {
+        let unique = UNIQUE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        env::temp_dir().join(format!(
+            "kittentts-server-rs-config-unit-{label}-{}-{unique}",
+            process::id()
+        ))
+    }
+
+    #[test]
+    fn output_channels_matches_validated_layouts() {
+        let mono = Settings {
+            channel_layout: "mono".to_string(),
+            ..Settings::default()
+        };
+        let stereo = Settings {
+            channel_layout: "stereo".to_string(),
+            ..Settings::default()
+        };
+
+        assert_eq!(mono.output_channels(), 1);
+        assert_eq!(stereo.output_channels(), 2);
+    }
+
+    #[test]
+    fn selected_config_path_prefers_explicit_path_over_env() {
+        let _guard = env_guard();
+        env::set_var(
+            format!("{ENV_PREFIX}CONFIG_FILE"),
+            "/tmp/from-env-settings.json",
+        );
+
+        let selected = selected_config_path(Some(PathBuf::from("/tmp/from-arg-settings.json")));
+
+        assert_eq!(selected, Some(PathBuf::from("/tmp/from-arg-settings.json")));
+    }
+
+    #[test]
+    fn selected_config_path_uses_env_when_no_explicit_path_is_provided() {
+        let _guard = env_guard();
+        env::set_var(
+            format!("{ENV_PREFIX}CONFIG_FILE"),
+            "/tmp/from-env-settings.json",
+        );
+
+        let selected = selected_config_path(None);
+
+        assert_eq!(selected, Some(PathBuf::from("/tmp/from-env-settings.json")));
+    }
+
+    #[test]
+    fn selected_config_path_uses_default_path_when_present() {
+        let mut guard = env_guard();
+        let temp_dir = unique_temp_dir("default-config-path");
+        fs::create_dir_all(temp_dir.join("config")).unwrap();
+        fs::write(temp_dir.join(DEFAULT_CONFIG_PATH), b"{}").unwrap();
+        env::set_current_dir(&temp_dir).unwrap();
+        guard.temp_dir = Some(temp_dir.clone());
+
+        let selected = selected_config_path(None);
+
+        assert_eq!(selected, Some(PathBuf::from(DEFAULT_CONFIG_PATH)));
+    }
+
+    #[test]
+    fn selected_config_path_returns_none_when_no_source_exists() {
+        let mut guard = env_guard();
+        let temp_dir = unique_temp_dir("no-config-path");
+        fs::create_dir_all(&temp_dir).unwrap();
+        env::set_current_dir(&temp_dir).unwrap();
+        guard.temp_dir = Some(temp_dir);
+
+        let selected = selected_config_path(None);
+
+        assert_eq!(selected, None);
+    }
+
+    #[test]
+    fn parse_bool_accepts_all_supported_aliases() {
+        for value in ["1", "true", "yes", "on", "TRUE", " Yes "] {
+            assert!(parse_bool(value).unwrap());
+        }
+
+        for value in ["0", "false", "no", "off", "FALSE", " Off "] {
+            assert!(!parse_bool(value).unwrap());
+        }
+    }
+}

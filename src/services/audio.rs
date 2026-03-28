@@ -308,6 +308,19 @@ mod tests {
     }
 
     #[test]
+    fn float_audio_to_pcm_rejects_zero_sample_rate() {
+        let audio = FloatAudioBuffer {
+            waveform: vec![0.0, 1.0],
+            sample_rate: 0,
+            channels: 1,
+        };
+
+        let error = float_audio_to_pcm(&audio).unwrap_err();
+
+        assert!(error.message.contains("sample_rate must be positive"));
+    }
+
+    #[test]
     fn normalize_audio_downmixes_stereo_to_mono() {
         let audio = AudioBuffer {
             pcm_s16le: b"\x10\x00\x30\x00\x20\x00\x40\x00".to_vec(),
@@ -364,6 +377,25 @@ mod tests {
     }
 
     #[test]
+    fn normalize_audio_rejects_invalid_target_settings() {
+        let audio = AudioBuffer {
+            pcm_s16le: b"\x10\x00\x20\x00".to_vec(),
+            sample_rate: 24_000,
+            channels: 1,
+        };
+
+        let sample_rate_error = normalize_audio(&audio, 0, 1).unwrap_err();
+        assert!(sample_rate_error
+            .message
+            .contains("target sample_rate must be positive"));
+
+        let channel_error = normalize_audio(&audio, 24_000, 3).unwrap_err();
+        assert!(channel_error
+            .message
+            .contains("target channels must be 1 or 2"));
+    }
+
+    #[test]
     fn serialize_wav_writes_expected_header() {
         let audio = AudioBuffer {
             pcm_s16le: samples_to_pcm(&[0, 1000, -1000, 2500]),
@@ -402,5 +434,20 @@ mod tests {
 
         assert_eq!(pcm, b"\x10\x00\x20\x00");
         assert_eq!(pcm.len(), 4);
+    }
+
+    #[test]
+    fn serialize_helpers_reject_invalid_audio_metadata() {
+        let audio = AudioBuffer {
+            pcm_s16le: b"\x10\x00\x20\x00".to_vec(),
+            sample_rate: 24_000,
+            channels: 3,
+        };
+
+        let wav_error = serialize_wav(&audio).unwrap_err();
+        assert!(wav_error.message.contains("channels must be 1 or 2"));
+
+        let pcm_error = serialize_pcm_s16le(&audio).unwrap_err();
+        assert!(pcm_error.message.contains("channels must be 1 or 2"));
     }
 }

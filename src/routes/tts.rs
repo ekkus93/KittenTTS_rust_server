@@ -424,6 +424,96 @@ mod tests {
         }))
     }
 
+    #[test]
+    fn normalize_output_format_trims_lowercases_and_rejects_blank_values() {
+        assert_eq!(
+            normalize_output_format(Some("  WAV_16000  ")),
+            Some("wav_16000".to_string())
+        );
+        assert_eq!(normalize_output_format(Some("   ")), None);
+        assert_eq!(normalize_output_format(None), None);
+    }
+
+    #[test]
+    fn negotiate_output_format_accepts_wav_variants_and_falls_back_when_not_strict() {
+        assert_eq!(
+            negotiate_output_format(Some(" WAV_22050 "), "wav", false).unwrap(),
+            "wav"
+        );
+        assert_eq!(
+            negotiate_output_format(Some("pcm"), "wav", false).unwrap(),
+            "wav"
+        );
+        assert_eq!(negotiate_output_format(None, "wav", false).unwrap(), "wav");
+    }
+
+    #[test]
+    fn negotiate_output_format_rejects_unsupported_values_in_strict_mode() {
+        let error = negotiate_output_format(Some("pcm"), "wav", true).unwrap_err();
+
+        assert_eq!(error.status, StatusCode::BAD_REQUEST);
+        assert!(error.message.contains("Unsupported output_format"));
+    }
+
+    #[test]
+    fn supported_stream_format_parses_default_and_explicit_sample_rates() {
+        assert_eq!(
+            supported_stream_format("wav", 24_000),
+            Some(StreamFormat {
+                container: "wav",
+                header_value: "wav".to_string(),
+                media_type: "audio/wav",
+                sample_rate: 24_000,
+            })
+        );
+        assert_eq!(
+            supported_stream_format("pcm_16000", 24_000),
+            Some(StreamFormat {
+                container: "pcm",
+                header_value: "pcm_16000".to_string(),
+                media_type: "audio/pcm",
+                sample_rate: 16_000,
+            })
+        );
+    }
+
+    #[test]
+    fn supported_stream_format_rejects_unknown_containers_and_sample_rates() {
+        assert_eq!(supported_stream_format("mp3", 24_000), None);
+        assert_eq!(supported_stream_format("wav_12345", 24_000), None);
+        assert_eq!(supported_stream_format("flac_16000", 24_000), None);
+    }
+
+    #[test]
+    fn negotiate_stream_format_defaults_and_falls_back_when_not_strict() {
+        assert_eq!(
+            negotiate_stream_format(None, 24_000, false).unwrap(),
+            StreamFormat {
+                container: "wav",
+                header_value: "wav".to_string(),
+                media_type: "audio/wav",
+                sample_rate: 24_000,
+            }
+        );
+        assert_eq!(
+            negotiate_stream_format(Some("mp3"), 24_000, false).unwrap(),
+            StreamFormat {
+                container: "wav",
+                header_value: "wav".to_string(),
+                media_type: "audio/wav",
+                sample_rate: 24_000,
+            }
+        );
+    }
+
+    #[test]
+    fn negotiate_stream_format_rejects_unsupported_values_in_strict_mode() {
+        let error = negotiate_stream_format(Some("pcm_12345"), 24_000, true).unwrap_err();
+
+        assert_eq!(error.status, StatusCode::BAD_REQUEST);
+        assert!(error.message.contains("Unsupported output_format"));
+    }
+
     #[tokio::test]
     async fn text_to_speech_default_returns_wav_response() {
         let last_voice = Arc::new(Mutex::new(None));

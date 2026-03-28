@@ -146,6 +146,7 @@ fn authentication_error_response(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Settings;
     use axum::http::HeaderValue;
 
     #[test]
@@ -173,8 +174,81 @@ mod tests {
     }
 
     #[test]
+    fn extract_api_key_accepts_case_insensitive_bearer_and_trims_token() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            AUTHORIZATION,
+            HeaderValue::from_static("  bEaReR   secret-token  "),
+        );
+
+        let (api_key, conflicting) = extract_api_key(&headers);
+
+        assert_eq!(api_key.as_deref(), Some("secret-token"));
+        assert!(!conflicting);
+    }
+
+    #[test]
+    fn extract_api_key_ignores_non_bearer_authorization_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, HeaderValue::from_static("Basic secret"));
+
+        let (api_key, conflicting) = extract_api_key(&headers);
+
+        assert!(api_key.is_none());
+        assert!(!conflicting);
+    }
+
+    #[test]
+    fn extract_api_key_ignores_blank_header_values() {
+        let mut headers = HeaderMap::new();
+        headers.insert("xi-api-key", HeaderValue::from_static("   "));
+        headers.insert(AUTHORIZATION, HeaderValue::from_static("Bearer    "));
+
+        let (api_key, conflicting) = extract_api_key(&headers);
+
+        assert!(api_key.is_none());
+        assert!(!conflicting);
+    }
+
+    #[test]
     fn requires_api_key_keeps_health_public() {
         assert!(!requires_api_key("/healthz"));
         assert!(requires_api_key("/v1/voices"));
+    }
+
+    #[test]
+    fn route_classification_uses_exact_public_and_openai_paths() {
+        assert!(!requires_api_key("/healthz/extra"));
+        assert!(requires_api_key("/v1"));
+        assert!(requires_api_key("/v1beta"));
+        assert!(!requires_api_key("/voices"));
+
+        assert!(is_openai_route("/v1/audio/speech"));
+        assert!(!is_openai_route("/v1/audio/speech/extra"));
+    }
+
+    #[test]
+    fn is_request_authorized_requires_matching_key_when_enabled() {
+        let settings = Settings {
+            auth_enabled: true,
+            local_api_key: Some("secret".to_string()),
+            ..Settings::default()
+        };
+
+        assert!(is_request_authorized(&settings, Some("secret")));
+        assert!(!is_request_authorized(&settings, Some("other")));
+        assert!(!is_request_authorized(&settings, None));
+    }
+
+    #[test]
+    fn is_request_authorized_allows_requests_when_auth_is_disabled() {
+        let settings = Settings {
+            auth_enabled: false,
+            local_api_key: None,
+            ..Settings::default()
+        };
+
+        assert!(is_request_authorized(&settings, None));
+        assert!(is_request_authorized(&settings, Some("anything")));
     }
 }
