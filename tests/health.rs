@@ -415,3 +415,129 @@ async fn stream_tts_response_omits_content_length_and_keeps_stream_headers() {
     assert!(response.headers().get("content-length").is_none());
     assert!(response.headers().get("X-Request-Id").is_some());
 }
+
+#[tokio::test]
+async fn non_strict_text_to_speech_invalid_output_format_falls_back_to_wav() {
+    let settings = Settings {
+        strict_mode: false,
+        output_format: "wav".to_string(),
+        ..Settings::default()
+    };
+    let app = build_router(tts_test_state(settings));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/text-to-speech")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"text":"hello fallback","output_format":"mp3"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "audio/wav");
+    assert_eq!(response.headers()["x-output-format"], "wav");
+    assert!(response.headers().get("content-length").is_some());
+}
+
+#[tokio::test]
+async fn non_strict_stream_invalid_output_format_falls_back_to_wav() {
+    let settings = Settings {
+        strict_mode: false,
+        output_format: "wav".to_string(),
+        ..Settings::default()
+    };
+    let app = build_router(tts_test_state(settings));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/text-to-speech/Bella/stream")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"text":"hello fallback stream","output_format":"mp3"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "audio/wav");
+    assert_eq!(response.headers()["x-output-format"], "wav");
+    assert!(response.headers().get("content-length").is_none());
+}
+
+#[tokio::test]
+async fn strict_text_to_speech_invalid_output_format_returns_validation_error() {
+    let settings = Settings {
+        strict_mode: true,
+        ..Settings::default()
+    };
+    let app = build_router(tts_test_state(settings));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/text-to-speech")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"text":"hello strict","output_format":"mp3"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(response.headers().get("X-Request-Id").is_some());
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body_json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body_json["error"]["code"], "validation_error");
+    assert!(body_json["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("Unsupported output_format"));
+}
+
+#[tokio::test]
+async fn strict_stream_invalid_output_format_returns_validation_error() {
+    let settings = Settings {
+        strict_mode: true,
+        ..Settings::default()
+    };
+    let app = build_router(tts_test_state(settings));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/text-to-speech/Bella/stream")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"text":"hello strict stream","output_format":"mp3"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(response.headers().get("X-Request-Id").is_some());
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body_json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body_json["error"]["code"], "validation_error");
+    assert!(body_json["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("Unsupported output_format"));
+}

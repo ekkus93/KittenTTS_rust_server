@@ -380,3 +380,8 @@
 - Added a minimal hidden public test-support constructor on `AppState` that builds a deterministic fake synthesis runtime from plain settings, available-voice names, waveform samples, sample rate, and channel count, without exposing the internal synth runtime API itself.
 - Used that constructor in `tests/health.rs` to add end-to-end TTS response-header integration tests covering non-stream WAV responses with `Content-Length`, OpenAI PCM responses with `Content-Length`, and streaming TTS responses that preserve `X-Output-Format` while omitting `Content-Length`.
 - Revalidated `KittenTTS_rust_server` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`; results are now `90 passed, 0 failed, 0 ignored` unit tests, `13 passed, 0 failed` config integration tests, and `16 passed, 0 failed` health integration tests.
+
+## 2026-03-28T14:38:57Z - GPT-5.4 - Added TTS negotiation integration coverage
+- Extended `tests/health.rs` with end-to-end strict-vs-non-strict content-negotiation tests for both non-stream and stream TTS routes, proving that unsupported `output_format` values fall back to configured WAV behavior when `strict_mode` is off and return local validation errors when `strict_mode` is on.
+- Kept the batch HTTP-visible and built on the existing hidden test-support `AppState` constructor so the success-path router tests still avoid exposing the full synth runtime API.
+- Revalidated `KittenTTS_rust_server` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`; results are now `90 passed, 0 failed, 0 ignored` unit tests, `13 passed, 0 failed` config integration tests, and `20 passed, 0 failed` health integration tests.
