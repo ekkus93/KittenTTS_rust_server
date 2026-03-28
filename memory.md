@@ -370,3 +370,8 @@
 - Added focused direct unit tests in `src/services/audio.rs` for zero source sample-rate rejection in `float_audio_to_pcm`, invalid target sample-rate/channel rejection in `normalize_audio`, and serialize-time validation failures for unsupported audio metadata.
 - Kept the batch helper-focused and test-only, extending the existing audio conversion coverage with the remaining validation branches rather than broader integration behavior.
 - Revalidated `KittenTTS_rust_server` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`; results are now `90 passed, 0 failed, 0 ignored` unit tests, `13 passed, 0 failed` config integration tests, and `8 passed, 0 failed` health integration tests.
+
+## 2026-03-28T14:09:27Z - GPT-5.4 - Added small auth-focused integration coverage
+- Extended `tests/health.rs` with router-level auth edge cases: matching dual API-key headers, blank API-key headers, non-bearer `Authorization` rejection, OpenAI conflicting-header rejection with the OpenAI error envelope, and the current unauthenticated 404 behavior for unknown non-`/v1` paths such as `/healthz/extra`.
+- Kept the batch integration-focused and HTTP-visible, using existing router construction instead of adding host-dependent runtime tests.
+- Revalidated `KittenTTS_rust_server` with `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`; results are now `90 passed, 0 failed, 0 ignored` unit tests, `13 passed, 0 failed` config integration tests, and `13 passed, 0 failed` health integration tests.

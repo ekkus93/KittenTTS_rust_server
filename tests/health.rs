@@ -5,6 +5,19 @@ use serde_json::Value;
 use std::path::PathBuf;
 use tower::ServiceExt;
 
+fn auth_enabled_state() -> AppState {
+    let settings = Settings {
+        auth_enabled: true,
+        local_api_key: Some("secret".to_string()),
+        ..Settings::default()
+    };
+
+    AppState::new(
+        settings,
+        EngineMetadata::new("kitten_tts_rs", "0.1.0", false),
+    )
+}
+
 #[tokio::test]
 async fn health_route_returns_server_metadata() {
     let mut engine_metadata = EngineMetadata::new("kitten_tts_rs", "0.1.0", false);
@@ -37,15 +50,7 @@ async fn health_route_returns_server_metadata() {
 
 #[tokio::test]
 async fn health_route_is_public_and_sets_request_id_header() {
-    let settings = Settings {
-        auth_enabled: true,
-        local_api_key: Some("secret".to_string()),
-        ..Settings::default()
-    };
-    let state = AppState::new(
-        settings,
-        EngineMetadata::new("kitten_tts_rs", "0.1.0", false),
-    );
+    let state = auth_enabled_state();
     let app = build_router(state);
 
     let response = app
@@ -64,15 +69,7 @@ async fn health_route_is_public_and_sets_request_id_header() {
 
 #[tokio::test]
 async fn protected_route_rejects_missing_api_key_with_local_error() {
-    let settings = Settings {
-        auth_enabled: true,
-        local_api_key: Some("secret".to_string()),
-        ..Settings::default()
-    };
-    let state = AppState::new(
-        settings,
-        EngineMetadata::new("kitten_tts_rs", "0.1.0", false),
-    );
+    let state = auth_enabled_state();
     let app = build_router(state);
 
     let response = app
@@ -126,15 +123,7 @@ async fn protected_route_allows_requests_when_auth_is_disabled() {
 
 #[tokio::test]
 async fn protected_route_accepts_xi_api_key() {
-    let settings = Settings {
-        auth_enabled: true,
-        local_api_key: Some("secret".to_string()),
-        ..Settings::default()
-    };
-    let state = AppState::new(
-        settings,
-        EngineMetadata::new("kitten_tts_rs", "0.1.0", false),
-    );
+    let state = auth_enabled_state();
     let app = build_router(state);
 
     let response = app
@@ -154,15 +143,7 @@ async fn protected_route_accepts_xi_api_key() {
 
 #[tokio::test]
 async fn protected_route_accepts_bearer_api_key() {
-    let settings = Settings {
-        auth_enabled: true,
-        local_api_key: Some("secret".to_string()),
-        ..Settings::default()
-    };
-    let state = AppState::new(
-        settings,
-        EngineMetadata::new("kitten_tts_rs", "0.1.0", false),
-    );
+    let state = auth_enabled_state();
     let app = build_router(state);
 
     let response = app
@@ -181,15 +162,7 @@ async fn protected_route_accepts_bearer_api_key() {
 
 #[tokio::test]
 async fn protected_route_rejects_conflicting_api_key_headers() {
-    let settings = Settings {
-        auth_enabled: true,
-        local_api_key: Some("secret".to_string()),
-        ..Settings::default()
-    };
-    let state = AppState::new(
-        settings,
-        EngineMetadata::new("kitten_tts_rs", "0.1.0", false),
-    );
+    let state = auth_enabled_state();
     let app = build_router(state);
 
     let response = app
@@ -213,15 +186,7 @@ async fn protected_route_rejects_conflicting_api_key_headers() {
 
 #[tokio::test]
 async fn openai_route_rejects_missing_api_key_with_openai_error_shape() {
-    let settings = Settings {
-        auth_enabled: true,
-        local_api_key: Some("secret".to_string()),
-        ..Settings::default()
-    };
-    let state = AppState::new(
-        settings,
-        EngineMetadata::new("kitten_tts_rs", "0.1.0", false),
-    );
+    let state = auth_enabled_state();
     let app = build_router(state);
 
     let response = app
@@ -244,4 +209,126 @@ async fn openai_route_rejects_missing_api_key_with_openai_error_shape() {
     assert_eq!(body_json["error"]["code"], "authentication_failed");
     assert_eq!(body_json["error"]["type"], "invalid_request_error");
     assert_eq!(body_json["error"]["message"], "Missing or invalid API key");
+}
+
+#[tokio::test]
+async fn protected_route_accepts_matching_dual_api_key_headers() {
+    let state = auth_enabled_state();
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/voices")
+                .header("xi-api-key", "secret")
+                .header("Authorization", "Bearer secret")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(response.headers().get("X-Request-Id").is_some());
+}
+
+#[tokio::test]
+async fn protected_route_rejects_blank_api_key_headers() {
+    let state = auth_enabled_state();
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/voices")
+                .header("xi-api-key", "   ")
+                .header("Authorization", "Bearer    ")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body_json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(
+        body_json["error"]["message"],
+        "Missing or invalid xi-api-key"
+    );
+}
+
+#[tokio::test]
+async fn protected_route_rejects_non_bearer_authorization_header() {
+    let state = auth_enabled_state();
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/voices")
+                .header("Authorization", "Basic secret")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body_json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(
+        body_json["error"]["message"],
+        "Missing or invalid xi-api-key"
+    );
+}
+
+#[tokio::test]
+async fn openai_route_rejects_conflicting_api_key_headers_with_openai_error_shape() {
+    let state = auth_enabled_state();
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/audio/speech")
+                .header("xi-api-key", "secret-a")
+                .header("Authorization", "Bearer secret-b")
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(response.headers().get("X-Request-Id").is_some());
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body_json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body_json["error"]["code"], "authentication_failed");
+    assert_eq!(body_json["error"]["type"], "invalid_request_error");
+    assert_eq!(body_json["error"]["message"], "Conflicting API key headers");
+}
+
+#[tokio::test]
+async fn non_v1_unknown_path_is_not_auth_protected_and_returns_not_found() {
+    let state = auth_enabled_state();
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/healthz/extra")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert!(response.headers().get("X-Request-Id").is_some());
 }
