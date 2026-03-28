@@ -293,3 +293,29 @@
 - `gosu` is still installed in the image but no longer invoked; can be removed in a future cleanup.
 - Confirmed: container reaches `(healthy)` status, `/healthz` returns 200 with `model_loaded:true`.
 - Changed files: `Dockerfile`, `docker-entrypoint.sh`.
+
+## 2026-03-28T12:05:08Z - GPT-5.4 - README systemd install workflow expanded
+- Updated `README.md` to add a Python-README-style `Install as a systemd Service` section title and a fuller host install workflow for the Rust server.
+- The docs now explicitly cover repo-root build assumptions, deployment directory creation, installing the binary/config/unit, creating `settings.json`, optional `/etc/default/kittentts-server-rs` overrides for `ORT_DYLIB_PATH` and `KITTENTTS_SERVER_MODEL_DIR`, and using `journalctl` for startup failures.
+
+## 2026-03-28T12:06:58Z - GPT-5.4 - README now distinguishes clean-checkout vs prebuilt systemd deploys
+- Added a short note to the Rust README's systemd section explaining that target-host installs can either build from a clean checkout or install a trusted prebuilt release binary.
+- The docs now make explicit that the Rust unit does not require a full deployed source tree once the binary, config files, unit file, and optional runtime assets are installed under `/opt/kittentts-server-rs`.
+
+## 2026-03-28T12:08:56Z - GPT-5.4 - Rust repo currently has no GitHub Actions release workflow
+- Checked `/home/phil/work/KittenTTS_rust_server/.github` and found only `copilot-instructions.md`; there is no `.github/workflows/` directory or workflow file in the Rust repo.
+- As of this check, tagged releases in `KittenTTS_rust_server` are not configured to trigger a GitHub Actions build, publish release assets, or publish a container image.
+
+## 2026-03-28T12:11:51Z - GPT-5.4 - Rust repo now has tag-driven GitHub release automation
+- Added `.github/workflows/ci.yml` so the Rust repo now validates on pushes and pull requests, and tag pushes matching `v*` build the Linux `x86_64` release binary with `--features real-backend`.
+- The workflow checks out the sibling backend repo `ekkus93/kitten_tts_rs`, exposes the expected `../kitten_tts_rs` path dependency, runs fmt/clippy/tests in CI, and publishes GitHub release assets for tags: the standalone executable, a release tarball containing the executable plus sample config and systemd unit, and `sha256sums.txt`.
+- Updated `README.md` to document how to create a tag, where to download the release executable or bundle, and how to use the released binary as an alternative to building locally for systemd installation.
+
+## 2026-03-28T12:16:52Z - GPT-5.4 - Full Rust validation rerun clean after CI and README updates
+- Ran `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features` in `KittenTTS_rust_server`.
+- Results were clean: unit tests `54 passed, 0 failed, 1 ignored`; config integration tests `13 passed, 0 failed, 1 ignored`; health integration tests `8 passed, 0 failed`; doc tests `0 failed`.
+- The two ignored tests remain the host-dependent real-backend synthesis and valid-config startup checks that require `KITTENTTS_SERVER_TEST_MODEL_DIR` plus a compatible runtime environment.
+
+## 2026-03-28T12:18:02Z - GPT-5.4 - README now links directly to CI workflow and releases
+- Added a GitHub Actions CI badge to the top of `README.md` for the Rust repo.
+- Added a short note in the `GitHub Releases` section linking directly to the workflow page and the Releases page so users can monitor regular validation runs and fetch tagged binaries more easily.

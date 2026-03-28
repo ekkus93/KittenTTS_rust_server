@@ -1,5 +1,7 @@
 # KittenTTS_rust_server
 
+[![CI](https://github.com/ekkus93/KittenTTS_rust_server/actions/workflows/ci.yml/badge.svg)](https://github.com/ekkus93/KittenTTS_rust_server/actions/workflows/ci.yml)
+
 Compatibility-focused Rust port scaffold for `KittenTTS_server`.
 
 ## Phase 0 scaffold
@@ -97,6 +99,52 @@ cargo fmt --check
 cargo check --features real-backend
 cargo test
 ```
+
+## GitHub Releases
+
+The Rust repo now uses GitHub Actions for two paths:
+
+- pushes and pull requests run validation (`cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-features`)
+- tag pushes matching `v*` build a Linux release binary with `--features real-backend` and publish release assets on GitHub
+
+You can monitor the workflow runs at [GitHub Actions CI](https://github.com/ekkus93/KittenTTS_rust_server/actions/workflows/ci.yml) and browse published tagged binaries at [GitHub Releases](https://github.com/ekkus93/KittenTTS_rust_server/releases).
+
+### Tag a release
+
+From the repo root:
+
+```bash
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+```
+
+After the tag push completes, GitHub Actions publishes these release assets for
+that tag:
+
+- `kittentts-server-rs-linux-x86_64`: standalone Linux executable
+- `kittentts-server-rs-linux-x86_64.tar.gz`: bundle containing the executable, `settings.example.json`, and the sample systemd unit
+- `sha256sums.txt`: checksums for the published binary assets
+
+### Download the release executable
+
+To fetch the standalone executable for a tagged release:
+
+```bash
+curl -L -o kittentts-server-rs \
+	https://github.com/ekkus93/KittenTTS_rust_server/releases/download/v0.1.0/kittentts-server-rs-linux-x86_64
+chmod 0755 kittentts-server-rs
+```
+
+To fetch the release bundle instead:
+
+```bash
+curl -L -O \
+	https://github.com/ekkus93/KittenTTS_rust_server/releases/download/v0.1.0/kittentts-server-rs-linux-x86_64.tar.gz
+tar -xzf kittentts-server-rs-linux-x86_64.tar.gz
+```
+
+The published executable is a Linux `x86_64` build. The systemd instructions
+below describe both the local-build path and the released-binary path.
 
 ## Manual Compatibility Validation
 
@@ -396,7 +444,7 @@ If you want to use host-managed model assets with compose, uncomment the model
 volume line in [compose.yaml](compose.yaml) and set
 `KITTENTTS_SERVER_MODEL_DIR=/app/models/...` in the service environment.
 
-## systemd
+## Install as a systemd Service
 
 For Linux hosts that should keep the Rust shim running in the background, a
 sample unit file is provided at
@@ -411,10 +459,29 @@ sudo apt-get install -y espeak-ng
 
 This host-level install is the intended systemd packaging model for `espeak-ng`.
 
-2. Build the release binary from this repo.
+2. Choose one binary source:
+
+Build from the local `KittenTTS_rust_server` repo root:
 
 ```bash
 cargo build --release --features real-backend
+```
+
+These commands assume your current directory is the local
+`KittenTTS_rust_server` checkout.
+
+If you are deploying from a clean checkout on the target host, run the build
+there and continue with the install steps below. If you already have a trusted
+release binary from another machine or CI job, you do not need to copy the full
+repo into `/opt/kittentts-server-rs`; the systemd unit only needs the installed
+binary, config files, optional runtime assets, and the unit file itself.
+
+Or download the tagged release bundle and extract it locally:
+
+```bash
+curl -L -O \
+	https://github.com/ekkus93/KittenTTS_rust_server/releases/download/v0.1.0/kittentts-server-rs-linux-x86_64.tar.gz
+tar -xzf kittentts-server-rs-linux-x86_64.tar.gz
 ```
 
 3. Create the service account and deployment directories.
@@ -427,15 +494,36 @@ sudo install -d -o kittentts-server -g kittentts-server \
 	/opt/kittentts-server-rs/.cache/huggingface
 ```
 
-4. Install the binary and sample config.
+This creates the same paths the sample unit expects for the deployed binary,
+runtime config, and Hugging Face cache.
+
+4. Install the binary, sample config, and sample unit file.
+
+If you built locally from source:
 
 ```bash
 sudo install -m 0755 target/release/kittentts-server-rs /opt/kittentts-server-rs/bin/kittentts-server-rs
 sudo install -m 0644 config/settings.example.json /opt/kittentts-server-rs/config/settings.example.json
+sudo install -m 0644 config/systemd/kittentts-server-rs.service /etc/systemd/system/kittentts-server-rs.service
 ```
 
-5. Optionally create `/opt/kittentts-server-rs/config/settings.json` from the
-sample config. The unit points `KITTENTTS_SERVER_CONFIG_FILE` at that path.
+If you downloaded the tagged release bundle instead:
+
+```bash
+sudo install -m 0755 ./kittentts-server-rs-linux-x86_64 /opt/kittentts-server-rs/bin/kittentts-server-rs
+sudo install -m 0644 ./settings.example.json /opt/kittentts-server-rs/config/settings.example.json
+sudo install -m 0644 ./kittentts-server-rs.service /etc/systemd/system/kittentts-server-rs.service
+```
+
+5. Create `/opt/kittentts-server-rs/config/settings.json` from the sample
+config if you want a persistent runtime config file.
+
+```bash
+sudo cp /opt/kittentts-server-rs/config/settings.example.json /opt/kittentts-server-rs/config/settings.json
+sudo chown kittentts-server:kittentts-server /opt/kittentts-server-rs/config/settings.json
+```
+
+The sample unit points `KITTENTTS_SERVER_CONFIG_FILE` at that path.
 
 6. If ONNX Runtime is not installed system-wide, install a compatible shared
 library and point `ORT_DYLIB_PATH` at it through `/etc/default/kittentts-server-rs`.
@@ -456,11 +544,19 @@ printf '%s\n' 'ORT_DYLIB_PATH=/opt/kittentts-server-rs/lib/onnxruntime/1.24.2/li
 You can also add other runtime overrides such as `KITTENTTS_SERVER_LOG_LEVEL`
 or `KITTENTTS_SERVER_MODEL_DIR` to the same environment file.
 
-7. Copy the unit into systemd's unit directory.
+7. If you want to force local model assets instead of the default Hugging Face
+download path, add `KITTENTTS_SERVER_MODEL_DIR` to `/etc/default/kittentts-server-rs`.
+
+Example:
 
 ```bash
-sudo cp config/systemd/kittentts-server-rs.service /etc/systemd/system/kittentts-server-rs.service
+printf '%s\n' 'KITTENTTS_SERVER_MODEL_DIR=/opt/kittentts-server-rs/models/kitten-tts-nano' \
+	| sudo tee -a /etc/default/kittentts-server-rs >/dev/null
 ```
+
+If you use that mode, make sure the directory contains `config.json`, the ONNX
+model file referenced by that config, and `voices.npz`, and that the deployed
+service account can read those files.
 
 8. Reload systemd and enable the service.
 
@@ -473,6 +569,12 @@ sudo systemctl enable --now kittentts-server-rs
 
 ```bash
 sudo systemctl status kittentts-server-rs
+```
+
+If startup fails, inspect the journal for the unit:
+
+```bash
+sudo journalctl -u kittentts-server-rs -n 100 --no-pager
 ```
 
 ## Uninstall systemd Service

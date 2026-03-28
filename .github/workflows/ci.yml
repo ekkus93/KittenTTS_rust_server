@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - "v*"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Rust server repo
+        uses: actions/checkout@v4
+
+      - name: Check out backend repo
+        uses: actions/checkout@v4
+        with:
+          repository: ekkus93/kitten_tts_rs
+          path: kitten_tts_rs
+
+      - name: Expose sibling backend path dependency
+        run: ln -s "$GITHUB_WORKSPACE/kitten_tts_rs" "$GITHUB_WORKSPACE/../kitten_tts_rs"
+
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            ca-certificates \
+            clang \
+            cmake \
+            espeak-ng \
+            libgomp1 \
+            libssl-dev \
+            pkg-config
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo registry and build outputs
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --all-features
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out Rust server repo
+        uses: actions/checkout@v4
+
+      - name: Check out backend repo
+        uses: actions/checkout@v4
+        with:
+          repository: ekkus93/kitten_tts_rs
+          path: kitten_tts_rs
+
+      - name: Expose sibling backend path dependency
+        run: ln -s "$GITHUB_WORKSPACE/kitten_tts_rs" "$GITHUB_WORKSPACE/../kitten_tts_rs"
+
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            ca-certificates \
+            clang \
+            cmake \
+            libssl-dev \
+            pkg-config
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry and build outputs
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release --features real-backend
+
+      - name: Package release assets
+        run: |
+          mkdir -p dist
+          cp target/release/kittentts-server-rs dist/kittentts-server-rs-linux-x86_64
+          cp config/settings.example.json dist/settings.example.json
+          cp config/systemd/kittentts-server-rs.service dist/kittentts-server-rs.service
+          tar -C dist -czf dist/kittentts-server-rs-linux-x86_64.tar.gz \
+            kittentts-server-rs-linux-x86_64 \
+            settings.example.json \
+            kittentts-server-rs.service
+          sha256sum \
+            dist/kittentts-server-rs-linux-x86_64 \
+            dist/kittentts-server-rs-linux-x86_64.tar.gz \
+            > dist/sha256sums.txt
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kittentts-server-rs-${{ github.ref_name }}-linux-x86_64
+          path: |
+            dist/kittentts-server-rs-linux-x86_64
+            dist/kittentts-server-rs-linux-x86_64.tar.gz
+            dist/sha256sums.txt
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/kittentts-server-rs-linux-x86_64
+            dist/kittentts-server-rs-linux-x86_64.tar.gz
+            dist/sha256sums.txt

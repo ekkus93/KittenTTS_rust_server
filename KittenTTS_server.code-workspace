@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "../KittenTTS_server"
+		},
+		{
+			"path": "."
+		},
+		{
+			"path": "../KittenTTS"
+		},
+		{
+			"path": "../kitten_tts_rs"
+		}
+	]
+}
