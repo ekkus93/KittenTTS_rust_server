@@ -486,7 +486,11 @@ mod tests {
         let (entered_tx, entered_rx) = mpsc::channel();
         let release = Arc::new((Mutex::new(false), Condvar::new()));
         let state = AppState::from_runtime(
-            crate::config::Settings::default(),
+            crate::config::Settings {
+                auth_enabled: true,
+                local_api_key: Some("secret".to_string()),
+                ..crate::config::Settings::default()
+            },
             test_runtime(GatedSynthesizer {
                 entered: entered_tx,
                 release: Arc::clone(&release),
@@ -508,6 +512,7 @@ mod tests {
                         .method("POST")
                         .uri("/v1/text-to-speech")
                         .header("content-type", "application/json")
+                        .header("xi-api-key", "secret")
                         .body(Body::from(r#"{"text":"blocking inference"}"#))
                         .expect("request"),
                 )
@@ -535,6 +540,42 @@ mod tests {
         });
         let health = health_rx.recv_timeout(Duration::from_secs(3));
 
+        // Invalid input and unauthenticated requests should also be answered
+        // without waiting for an ongoing model inference to finish.
+        let (invalid_tx, invalid_rx) = mpsc::channel();
+        let invalid_app = app.clone();
+        runtime.spawn(async move {
+            let response = invalid_app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/v1/text-to-speech")
+                        .header("content-type", "application/json")
+                        .header("xi-api-key", "secret")
+                        .body(Body::from(r#"{"text":""}"#))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let _ = invalid_tx.send(response.status());
+        });
+        let invalid = invalid_rx.recv_timeout(Duration::from_secs(3));
+
+        let (unauth_tx, unauth_rx) = mpsc::channel();
+        runtime.spawn(async move {
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/v1/voices")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let _ = unauth_tx.send(response.status());
+        });
+        let unauth = unauth_rx.recv_timeout(Duration::from_secs(3));
+
         // Always release the fake inference, including on timeout, so a
         // regression does not hang the test process or Tokio shutdown.
         {
@@ -545,6 +586,8 @@ mod tests {
         let speech = speech_rx.recv_timeout(Duration::from_secs(5));
         assert!(entered.is_ok(), "synthesis never started: {entered:?}");
         assert_eq!(health.ok(), Some(StatusCode::OK), "health request starved");
+        assert_eq!(invalid.ok(), Some(StatusCode::BAD_REQUEST), "validation starved");
+        assert_eq!(unauth.ok(), Some(StatusCode::UNAUTHORIZED), "auth starved");
         assert_eq!(speech.ok(), Some(StatusCode::OK), "speech did not finish");
     }
 
