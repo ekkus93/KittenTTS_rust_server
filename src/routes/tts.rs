@@ -47,7 +47,7 @@ async fn text_to_speech_default(
     Extension(request_context): Extension<SharedRequestContext>,
     Json(payload): Json<TtsRequest>,
 ) -> Result<Response, AppError> {
-    build_tts_response(None, payload, state, &request_context)
+    run_blocking_tts(move || build_tts_response(None, payload, state, &request_context)).await
 }
 
 async fn text_to_speech(
@@ -56,7 +56,7 @@ async fn text_to_speech(
     Extension(request_context): Extension<SharedRequestContext>,
     Json(payload): Json<TtsRequest>,
 ) -> Result<Response, AppError> {
-    build_tts_response(Some(voice_id), payload, state, &request_context)
+    run_blocking_tts(move || build_tts_response(Some(voice_id), payload, state, &request_context)).await
 }
 
 async fn text_to_speech_stream(
@@ -65,7 +65,7 @@ async fn text_to_speech_stream(
     Extension(request_context): Extension<SharedRequestContext>,
     Json(payload): Json<TtsRequest>,
 ) -> Result<Response, AppError> {
-    build_streaming_tts_response(voice_id, payload, state, &request_context)
+    run_blocking_tts(move || build_streaming_tts_response(voice_id, payload, state, &request_context)).await
 }
 
 async fn openai_text_to_speech(
@@ -73,8 +73,11 @@ async fn openai_text_to_speech(
     Extension(request_context): Extension<SharedRequestContext>,
     Json(payload): Json<Value>,
 ) -> Response {
-    match parse_openai_request(payload)
-        .and_then(|request| build_openai_speech_response(request, state, &request_context))
+    match run_blocking_tts(move || {
+        parse_openai_request(payload)
+            .and_then(|request| build_openai_speech_response(request, state, &request_context))
+    })
+    .await
     {
         Ok(response) => response,
         Err(error) => {
@@ -82,6 +85,19 @@ async fn openai_text_to_speech(
             (error.status, Json(error.into_openai_envelope())).into_response()
         }
     }
+}
+
+// Keep synchronous ONNX generation and PCM serialization off Tokio worker threads.
+// The backend still serializes its single model instance via Mutex<KittenTTS>;
+// offloading protects other HTTP handlers but does not parallelize inference.
+// Once started, spawn_blocking may continue even after its HTTP future is dropped.
+async fn run_blocking_tts<F>(operation: F) -> Result<Response, AppError>
+where
+    F: FnOnce() -> Result<Response, AppError> + Send + 'static,
+{
+    tokio::task::spawn_blocking(operation)
+        .await
+        .map_err(|err| AppError::internal(format!("speech synthesis task failed: {err}")))?
 }
 
 fn parse_openai_request(payload: Value) -> Result<OpenAiSpeechRequest, AppError> {
@@ -422,6 +438,116 @@ mod tests {
             text_length: None,
             error_code: None,
         }))
+    }
+
+    #[test]
+    fn blocking_synthesis_does_not_starve_single_tokio_worker() {
+        use std::sync::{mpsc, Condvar};
+        use std::time::Duration;
+
+        struct GatedSynthesizer {
+            entered: mpsc::Sender<()>,
+            release: Arc<(Mutex<bool>, Condvar)>,
+        }
+
+        impl Synthesizer for GatedSynthesizer {
+            fn list_voices(&self) -> Vec<String> {
+                vec!["Jasper".to_string()]
+            }
+
+            fn synthesize(
+                &self,
+                request: &InternalSynthesisRequest,
+            ) -> Result<SynthResult, AppError> {
+                self.entered.send(()).expect("gate receiver exists");
+                let (lock, ready) = &*self.release;
+                let mut released = lock.lock().expect("gate is not poisoned");
+                while !*released {
+                    released = ready.wait(released).expect("gate is not poisoned");
+                }
+                Ok(SynthResult {
+                    audio: FloatAudioBuffer {
+                        waveform: vec![0.0, 0.2, -0.2, 0.4],
+                        sample_rate: 24_000,
+                        channels: 1,
+                    },
+                    voice: request.voice_id.clone().unwrap_or_default(),
+                })
+            }
+        }
+
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let release = Arc::new((Mutex::new(false), Condvar::new()));
+        let state = AppState::from_runtime(
+            crate::config::Settings::default(),
+            test_runtime(GatedSynthesizer {
+                entered: entered_tx,
+                release: Arc::clone(&release),
+            }),
+        );
+        let app = crate::routes::build_router(state);
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("one-worker runtime");
+        let (speech_tx, speech_rx) = mpsc::channel();
+        let speech_app = app.clone();
+        runtime.spawn(async move {
+            let response = speech_app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/v1/text-to-speech")
+                        .header("content-type", "application/json")
+                        .body(Body::from(r#"{"text":"blocking inference"}"#))
+                        .expect("request"),
+                )
+                .await
+                .expect("speech response");
+            let _ = speech_tx.send(response.status());
+        });
+
+        // The test thread runs outside the runtime: a blocked Tokio worker
+        // cannot accidentally prevent us from releasing the fake inference.
+        let entered = entered_rx.recv_timeout(Duration::from_secs(5));
+        let (health_tx, health_rx) = mpsc::channel();
+        let health_app = app.clone();
+        runtime.spawn(async move {
+            let response = health_app
+                .oneshot(
+                    Request::builder()
+                        .uri("/healthz")
+                        .body(Body::empty())
+                        .expect("request"),
+                )
+                .await
+                .expect("health response");
+            let _ = health_tx.send(response.status());
+        });
+        let health = health_rx.recv_timeout(Duration::from_secs(3));
+
+        // Always release the fake inference, including on timeout, so a
+        // regression does not hang the test process or Tokio shutdown.
+        {
+            let (lock, ready) = &*release;
+            *lock.lock().expect("gate is not poisoned") = true;
+            ready.notify_all();
+        }
+        let speech = speech_rx.recv_timeout(Duration::from_secs(5));
+        assert!(entered.is_ok(), "synthesis never started: {entered:?}");
+        assert_eq!(health.ok(), Some(StatusCode::OK), "health request starved");
+        assert_eq!(speech.ok(), Some(StatusCode::OK), "speech did not finish");
+    }
+
+    #[tokio::test]
+    async fn panicking_blocking_task_becomes_internal_application_error() {
+        let error = run_blocking_tts(|| panic!("deliberate test panic"))
+            .await
+            .expect_err("join failure should not produce a successful response");
+        assert_eq!(error.status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(error.message.contains("speech synthesis task failed"));
     }
 
     #[test]
