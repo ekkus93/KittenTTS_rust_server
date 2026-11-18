@@ -49,3 +49,34 @@ Evidence refers to **specific source commits and runs**, not a blanket statement
 - **Real inference test environment needed:** model assets, `espeak-ng`, ONNX Runtime (shared library), appropriate CPU/RAM/network/cache access, and a runner able to run the opt-in harness. Until a real-model test actually runs, B2 and the final readiness gate remain open.
 - **Python parity environment needed:** exact Python reference revision and separately running Python/Rust servers configured alike. March side-by-side tests are historical and not enough to close Phase 7.10.
 - Continue independently actionable tests/docs. Do not change `docs/RUST_PORT_TODO.md` Phase 7.10 without measured parity evidence.
+
+## 2026-11-18 — Additional deterministic tests and parity/benchmark tooling
+
+### Follow-up source commits and Rust CI
+- `0b96801a00b9b2610067df08bb389029ebc1194e`: add `tests/compare_python_rust.py`, a Python standard-library side-by-side HTTP comparison harness. It normalizes JSON key ordering and transient request IDs, checks WAV/PCM structural validity, records differences in duration/stream transfer encoding/engine metadata, and writes per-case **PASS/FAIL/BLOCKED** evidence to JSON. **Not executed against two live services.** This closes harness design (D1.2–D1.3), not D2.
+- `22e4a6f` / `f9693e1`: add and rustfmt tests for concurrent voice-specific WAV results and distinct request IDs, plus local/OpenAI error-envelope behavior when the blocking synthesis task panics. These tests later passed in CI.
+- `9a4d98c390946662efef33deb10f676b155e5d0a`: add deterministic HTTP cancellation test using a fake serialized backend. A request is aborted while the first synthesis is gated; after release the next request must still complete. [Run #18](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44410107649): **passed**.
+- `ebfcb4a4534f2e37e7bd5fc5505713cfb7e0e36f`: add `tests/benchmark_real_tts.py` for opt-in, **real-model** 1/2/4 client load with wall time, throughput, p50, nearest-rank p95, and optional Linux RSS observations; [run #19](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44410381777): **passed Rust CI**. **Actual performance measurements have NOT been executed.**
+- `2a95070` / `8a47f5d0bb17b72db81afc36cd7267b82f342de2`: extend the single-worker gated test to prove invalid input and unauthenticated requests also complete while a valid TTS request is blocked, with strict rustfmt cleanup. [Run #22](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44411375833): **passed**. Test counts: **95 lib + 5 bin + 13 config + 20 HTTP integration = 133 passed, 0 failed, 0 ignored**.
+- `751316184e9248c4258f119b969c0b3b00d33adc`: document opt-in smoke, parity, and benchmark commands in README. The temporary failures on adjacent commits were rustfmt-only (the expanded assertion was too long); current source is formatted and verified.
+- `70d595feae4e8338a909c7d05865fcb91dc5e5e7`: extend opt-in real smoke script with configured voice alias (`Narrator` → `Jasper`) and separate fail-fast startup checks for missing model config, missing `voices.npz`, and absent `espeak-ng`. [Run #23](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44411754423): **passed Rust CI**, but this workflow does **not** execute Python scripts or real-model inference. B2 remains **not run**.
+- See the [CI runs](https://github.com/ekkus93/KittenTTS_rust_server/actions) for exact-run status; do not extrapolate a model-backed pass from Rust tests.
+
+### What the new tests actually establish
+- C2.2: two distinct HTTP error-envelope styles still surface backend panic as an error, with request IDs, rather than silently returning audio.
+- C2.4/C3.3: deterministic simulated cancellation does not poison a single-instance/serialized fake backend; the underlying real ONNX model has not been stress-tested.
+- C3.1: concurrent requests carry independent request IDs and voice-specific WAV sample values.
+- C3.2: health, bad-input validation, and auth checks remain responsive under a deliberately gated synthesis call on a one-worker Tokio runtime.
+- A2.6: the November `master` code revisions have passing fresh exact-SHA CI, including [run #23](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44411754423). Docs-only follow-up commits create new runs that must be inspected independently.
+
+### Remaining blockers and next permission boundary
+1. **Required workflow approval:** `.github/copilot-instructions.md` requires the user's express approval before changing CI policy. Proposed change: add a manual/opt-in job for `cargo check --features real-backend`, release build, real ONNX smoke harness and optional benchmark; record a pinned/verified backend revision and controlled Rust toolchain instead of moving `stable`. This was **not** implemented.
+2. **Real model runner:** source repo CI currently does not invoke inference; obtain execution on an appropriate runner with compatible ONNX Runtime shared library, `espeak-ng`, model weights/cache, and CPU/RAM/network capacity. Passing Rust CI is not enough for B2, C3.4, A3.2–A3.4.
+3. **Python comparison access:** identify the exact Python `KittenTTS_server` ref and provide a way to run it alongside Rust. Ralph Bridge currently cannot read the separate Python/backend repos directly, although the server CI successfully checked out the backend SHA recorded above. No D2 suite was executed; existing `docs/RUST_PORT_TODO.md` Phase 7.10 remains unchecked.
+4. **Runtime deployment:** no fresh Docker/systemd installation was performed. These are unverified, **not failed**.
+5. **Python scripts themselves:** the opt-in Python utilities are committed but have not been executed or syntax-checked in the existing Rust-only CI workflow. They must be validated in the designated real-model/parity workflow when approved.
+
+### Next actionable pass
+- With approval, extend the GitHub Actions workflow for an opt-in, bounded and reproducible real-backend job; run it against a recorded server/backend/model revision and fix observed issues.
+- With Python reference availability, run comparison cases and record actual differences/waivers. Keep the original Phase 7.10 unchecked until the replacement decision is evidence-backed.
+- After any change, refresh exact-head CI, update this ledger with observed results, and only check TODO tasks that have concrete acceptance evidence.

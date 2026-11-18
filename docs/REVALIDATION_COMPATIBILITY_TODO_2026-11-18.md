@@ -33,7 +33,7 @@
 - [x] **A2.3** Verify `cargo clippy --all-targets --all-features -- -D warnings`.
 - [x] **A2.4** Verify `cargo test --all-features` and record counts/failures; check no test was unintentionally skipped.
 - [ ] **A2.5** Verify `cargo build --release --features real-backend` with the actual sibling checkout.
-- [ ] **A2.6** Trigger or observe a *fresh* GitHub Actions validation for the exact current HEAD; record result, run ID, status, and date.
+- [x] **A2.6** Trigger or observe a *fresh* GitHub Actions validation for the exact current HEAD; record result, run ID, status, and date.
 - [x] **A2.7** Diagnose and fix any reproducible failure; rerun the exact impacted checks and CI.
 
 ### A3. Release/deployment reproducibility
@@ -73,15 +73,15 @@
 
 ### C2. Minimal safe remediation
 - [x] **C2.1** Move synchronous TTS work to an appropriate `spawn_blocking` boundary; preserve request validation, response shape and voice resolution.
-- [ ] **C2.2** Preserve local and OpenAI error-envelope distinctions and request IDs on backend, panic/join, validation, and authorization failures.
+- [x] **C2.2** Preserve local and OpenAI error-envelope distinctions and request IDs on backend, panic/join, validation, and authorization failures.
 - [x] **C2.3** Keep a single backend instance with safe mutex ownership unless measurements justify a larger change; explicitly verify no lock is held over an `.await`.
-- [ ] **C2.4** Document what happens if an HTTP client disconnects during blocking inference; prevent corruption, race conditions, and accidental cross-request state.
+- [x] **C2.4** Document what happens if an HTTP client disconnects during blocking inference; prevent corruption, race conditions, and accidental cross-request state.
 - [ ] **C2.5** If bounded admission/backpressure is necessary, document its tradeoffs and obtain approval for any outward-facing behavior change.
 
 ### C3. Verify concurrency
-- [ ] **C3.1** Test concurrent valid requests with distinct voices/text and validate audio, headers, IDs, and selected voice isolation.
-- [ ] **C3.2** Test `/healthz`, invalid input, and authentication while synthesis is in flight; no scheduler starvation/deadlock.
-- [ ] **C3.3** Test backend failure/panic recovery and client cancellation where feasible.
+- [x] **C3.1** Test concurrent valid requests with distinct voices/text and validate audio, headers, IDs, and selected voice isolation.
+- [x] **C3.2** Test `/healthz`, invalid input, and authentication while synthesis is in flight; no scheduler starvation/deadlock.
+- [x] **C3.3** Test backend failure/panic recovery and client cancellation where feasible.
 - [ ] **C3.4** Run real-model low/moderate concurrency benchmark: wall time, throughput, p50/p95 latency, peak memory, and hardware/runner description.
 - [x] **C3.5** Confirm format, Clippy, existing test suite, and exact-head CI still pass after code changes.
 
@@ -91,8 +91,8 @@
 
 ### D1. Define apples-to-apples parity
 - [ ] **D1.1** Capture exact Python `KittenTTS_server` revision and equivalent Rust/backend/model/voice config.
-- [ ] **D1.2** Build a repeatable request corpus and comparator with explicit normalizations (JSON key order, transient request ID/timestamps).
-- [ ] **D1.3** Define explicit PASS / FAIL / WAIVED / BLOCKED classification and artifact/evidence format before testing.
+- [x] **D1.2** Build a repeatable request corpus and comparator with explicit normalizations (JSON key order, transient request ID/timestamps).
+- [x] **D1.3** Define explicit PASS / FAIL / WAIVED / BLOCKED classification and artifact/evidence format before testing.
 
 ### D2. Execute route matrix
 - [ ] **D2.1** Compare `/healthz` metadata and `/v1/voices` inventory/descriptor fields.
