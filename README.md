@@ -100,6 +100,83 @@ cargo check --features real-backend
 cargo test
 ```
 
+## Revalidation and Compatibility Tests (November 2026)
+
+The regular Rust CI suite uses deterministic fake synths for most HTTP tests.
+A successful `cargo test --all-features` **does not** prove real ONNX synthesis.
+Track the follow-up program in
+[`docs/REVALIDATION_COMPATIBILITY_TODO_2026-11-18.md`](docs/REVALIDATION_COMPATIBILITY_TODO_2026-11-18.md)
+and its [evidence ledger](docs/REVALIDATION_EVIDENCE.md).
+
+### Opt-in model-backed HTTP smoke test
+
+Check out `kitten_tts_rs` alongside this repository, install `espeak-ng`,
+provide a compatible ONNX Runtime library (for example via `ORT_DYLIB_PATH`),
+and supply model files with `KITTENTTS_SERVER_MODEL_DIR` (absolute path)
+or allow the documented Hugging Face download/cache path.
+
+```sh
+cargo build --release --features real-backend
+python3 tests/live_backend_smoke.py
+```
+
+The Python 3 test harness requires no additional packages; it launches the
+release server with an isolated localhost configuration, waits for model
+readiness, generates audio through the ElevenLabs-style and OpenAI-style
+routes, validates WAV/PCM headers and non-silent samples, checks basic errors,
+and terminates the test process. It **fails** when real model prerequisites are
+missing; it is not run by default in CI.
+
+### Side-by-side Python compatibility comparator
+
+Start the original Python `KittenTTS_server` and this Rust server on separate
+localhost ports, with equivalent model assets, voice map, auth, strict-mode,
+sample-rate, and config settings. Record both exact Git revisions, the backend
+revision, and the model revision:
+
+```sh
+python3 tests/compare_python_rust.py \
+  --python-url http://127.0.0.1:8008 \
+  --rust-url http://127.0.0.1:8009 \
+  --python-ref PYTHON_COMMIT_SHA \
+  --rust-ref RUST_COMMIT_SHA \
+  --backend-ref BACKEND_COMMIT_SHA \
+  --model-ref MODEL_REVISION \
+  --output parity-report.json
+```
+
+Run again with `--strict` when **both** services use strict mode. For
+auth-enabled comparisons set `--auth-mode enabled --api-key YOUR_KEY`
+(the reports do not persist the key; beware that command-line arguments may
+be visible to local process listings). The comparator reports PASS/FAIL/BLOCKED
+per case, compares normalized HTTP/JSON contracts, and validates real audio
+without requiring identical waveform bytes. Any material differences need
+review before considering the Python service replaceable.
+
+### Opt-in concurrency and memory benchmark
+
+Run the real-model Rust server separately, and optionally provide its local
+Linux PID to sample `VmRSS` for peak **observed**, not absolute, memory:
+
+```sh
+python3 tests/benchmark_real_tts.py \
+  --url http://127.0.0.1:8008 \
+  --concurrency 1 2 4 --requests 8 \
+  --pid SERVER_PID \
+  --server-ref RUST_COMMIT_SHA \
+  --backend-ref BACKEND_COMMIT_SHA \
+  --model-ref MODEL_REVISION \
+  --output real-tts-benchmark.json
+```
+
+If authentication is enabled, set `KITTENTTS_API_KEY` in the benchmark process
+environment. The test measures wall time, request throughput, median and
+nearest-rank p95 latency, WAV validity, and available RSS observations. It is
+only meaningful when all requests use the **actual loaded model**. The current
+backend uses one model instance and serializes access through a mutex; moving
+generation to blocking worker threads improves HTTP responsiveness, not
+single-model inference parallelism.
+
 ## GitHub Releases
 
 The Rust repo now uses GitHub Actions for two paths:
