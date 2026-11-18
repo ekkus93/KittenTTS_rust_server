@@ -56,7 +56,8 @@ async fn text_to_speech(
     Extension(request_context): Extension<SharedRequestContext>,
     Json(payload): Json<TtsRequest>,
 ) -> Result<Response, AppError> {
-    run_blocking_tts(move || build_tts_response(Some(voice_id), payload, state, &request_context)).await
+    run_blocking_tts(move || build_tts_response(Some(voice_id), payload, state, &request_context))
+        .await
 }
 
 async fn text_to_speech_stream(
@@ -65,7 +66,10 @@ async fn text_to_speech_stream(
     Extension(request_context): Extension<SharedRequestContext>,
     Json(payload): Json<TtsRequest>,
 ) -> Result<Response, AppError> {
-    run_blocking_tts(move || build_streaming_tts_response(voice_id, payload, state, &request_context)).await
+    run_blocking_tts(move || {
+        build_streaming_tts_response(voice_id, payload, state, &request_context)
+    })
+    .await
 }
 
 async fn openai_text_to_speech(
