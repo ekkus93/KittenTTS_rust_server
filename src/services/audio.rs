@@ -141,7 +141,7 @@ fn convert_channels(
     match (source_channels, target_channels) {
         (2, 1) => {
             let mut mono_samples = Vec::with_capacity(samples.len() / 2);
-            for frame in samples.chunks_exact(2) {
+            for frame in samples.as_chunks::<2>().0 {
                 let averaged = (i32::from(frame[0]) + i32::from(frame[1])) / 2;
                 mono_samples.push(clip_s16(averaged));
             }
@@ -210,8 +210,10 @@ fn pcm_to_samples(pcm_s16le: &[u8]) -> Result<Vec<i16>, AppError> {
     }
 
     Ok(pcm_s16le
-        .chunks_exact(2)
-        .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|chunk| i16::from_le_bytes(*chunk))
         .collect())
 }
 
@@ -256,8 +258,10 @@ mod tests {
 
     fn samples_from_pcm(pcm_s16le: &[u8]) -> Vec<i16> {
         pcm_s16le
-            .chunks_exact(2)
-            .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|chunk| i16::from_le_bytes(*chunk))
             .collect()
     }
 
