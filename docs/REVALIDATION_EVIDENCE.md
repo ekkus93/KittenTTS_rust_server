@@ -117,3 +117,12 @@ Evidence refers to **specific source commits and runs**, not a blanket statement
 - **Pre-fix reproduction (C1.2–C1.3):** deterministic post-fix starvation tests pass; the pre-fix binary's failure and pre-change performance profile have not been measured.
 - **Admission limits (C2.5):** measured low/moderate load does not establish whether additional bounded backpressure is required; do not silently introduce limits.
 - **Final sign-off:** no claim of Python drop-in replacement readiness or production cutover. Cited green runs are real audio/backend successes, not Python parity results.
+
+## 2026-11-18 — Docker packaging remediation and runtime smoke attempt
+
+- Container source now uses `rust:1.100.0-bookworm` to align the builder with pinned CI and `python:3.13-slim-bookworm` as a temporary ONNX Runtime extraction stage. It downloads version-pinned `onnxruntime==1.24.2` from PyPI, copies only the native `libonnxruntime*.so*` libraries into the final Debian image, and does not ship Python in the runtime. This fixes the obsolete GitHub ONNX archive URL that returned HTTP 404.
+- `.github/workflows/ci.yml` has an opt-in `run_docker` dispatch input and a `[run-docker]` master-commit marker (alongside required `[run-real-model]`). It builds with `docker buildx`, pins the backend checkout, mounts the verified model assets into a running container, checks loaded-model `/healthz`, and synthesizes actual WAV using two HTTP requests. Never infer Docker runtime readiness from the build alone.
+- Systemd installation steps in `README.md` now extract the pinned ONNX 1.24.2 library from the PyPI wheel instead of the broken upstream release archive; this documentation change is not an observed systemd runtime test.
+- `b10f0185db4ab63009bfd47af5082637408fe668`: first Docker opt-in [run #36](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44421144353) had not completed when reviewed, with the initial validation job held at runner dependency installation. **No Docker acceptance proof from that run.**
+- `be6e8a400f733105769ce6768bffbc096f56deda`: normal push [run #37](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44422393483) **passed** the regular validation suite with the updated Dockerfile and README; no Docker job ran because the commit did not request it.
+- Next action: trigger and inspect another explicitly opt-in Docker test on exact current `master`; only check A3.3 if that model-backed image test passes. Unverified outcomes stay open.
