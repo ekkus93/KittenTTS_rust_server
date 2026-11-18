@@ -77,6 +77,9 @@ async fn openai_text_to_speech(
     Extension(request_context): Extension<SharedRequestContext>,
     Json(payload): Json<Value>,
 ) -> Response {
+    // Retain request metadata for the HTTP error envelope after the blocking
+    // closure takes ownership of its synthesis request context.
+    let error_context = request_context.clone();
     match run_blocking_tts(move || {
         parse_openai_request(payload)
             .and_then(|request| build_openai_speech_response(request, state, &request_context))
@@ -85,7 +88,7 @@ async fn openai_text_to_speech(
     {
         Ok(response) => response,
         Err(error) => {
-            set_error_code(&request_context, error.code.as_str());
+            set_error_code(&error_context, error.code.as_str());
             (error.status, Json(error.into_openai_envelope())).into_response()
         }
     }
