@@ -69,7 +69,7 @@ Evidence refers to **specific source commits and runs**, not a blanket statement
 - C3.2: health, bad-input validation, and auth checks remain responsive under a deliberately gated synthesis call on a one-worker Tokio runtime.
 - A2.6: the November `master` code revisions have passing fresh exact-SHA CI, including [run #25](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44411754423). Docs-only follow-up commits create new runs that must be inspected independently.
 
-### Remaining blockers and next permission boundary
+### Historical blockers (updated by the later verified CI section)
 1. **Required workflow approval:** `.github/copilot-instructions.md` requires the user's express approval before changing CI policy. Proposed change: add a manual/opt-in job for `cargo check --features real-backend`, release build, real ONNX smoke harness and optional benchmark; record a pinned/verified backend revision and controlled Rust toolchain instead of moving `stable`. This was **not** implemented.
 2. **Real model runner:** source repo CI currently does not invoke inference; obtain execution on an appropriate runner with compatible ONNX Runtime shared library, `espeak-ng`, model weights/cache, and CPU/RAM/network capacity. Passing Rust CI is not enough for B2, C3.4, A3.2–A3.4.
 3. **Python comparison access:** identify the exact Python `KittenTTS_server` ref and provide a way to run it alongside Rust. Ralph Bridge currently cannot read the separate Python/backend repos directly, although the server CI successfully checked out the backend SHA recorded above. No D2 suite was executed; existing `docs/RUST_PORT_TODO.md` Phase 7.10 remains unchecked.
@@ -80,3 +80,40 @@ Evidence refers to **specific source commits and runs**, not a blanket statement
 - With approval, extend the GitHub Actions workflow for an opt-in, bounded and reproducible real-backend job; run it against a recorded server/backend/model revision and fix observed issues.
 - With Python reference availability, run comparison cases and record actual differences/waivers. Keep the original Phase 7.10 unchecked until the replacement decision is evidence-backed.
 - After any change, refresh exact-head CI, update this ledger with observed results, and only check TODO tasks that have concrete acceptance evidence.
+
+
+## 2026-11-18 — Explicit CI approval, release rebuild, and **real-model verification**
+
+### Approval, reproducibility and CI implementation
+- User explicitly authorized edits to `.github/workflows/ci.yml` on 2026-11-18.
+- Current pinned validation configuration: Ubuntu **26.04** x86_64, Rust **1.100.0**, sibling backend **`df7718161bc68c8b13bea85e879308becf12e87b`**, and ORT **1.24.2** from a versioned PyPI binary wheel. Rust CI keeps `cargo fmt --check`, `cargo check --features real-backend`, strict Clippy, `cargo test --all-features`, and Python syntax checks.
+- Opt-in workflow uses `workflow_dispatch` or a `master` commit explicitly containing `[run-real-model]`; adding `[run-benchmark]` enables the additional workload. Normal push/PR commits remain model-free. Separate optimized `cargo build --release --locked --features real-backend` runs before actual HTTP tests; artifact is reused without rebuilding.
+- Model repository: `KittenML/kitten-tts-nano-0.8-fp32`; model revision explicitly pinned to **`e73cfb095bd949c786ccdcf3b8ab04eb36c47442`**. GitHub model/ORT SHA provenance and the test/benchmark report are attached to exact-head runs. Model weights and synthesized audio are **not** uploaded.
+
+### Resolved operational failures
+- [Run #28](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44416884598) contained a workflow-expression error: `runner.temp` referenced at job scope, before a runner existed. Corrected by initializing runtime paths in a step.
+- [Run #29](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44417014152) proved the pinned feature build and Python syntax checks. [Runs #30](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44417267045) and [#31](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44417801705) each verified the optimized release build, but real-model installation failed because the GitHub ONNX Runtime 1.24.2 archive URL returned **HTTP 404**.
+- Replaced the unavailable release asset with the `onnxruntime==1.24.2` binary wheel from PyPI, extracting the native library and companion providers. No Cargo dependency changes; record the wheel/library SHA-256 in the CI evidence artifact. The CI input uses `actions/setup-python` and explicitly avoids relying on a system-wide ONNX Runtime installation.
+
+### Successful real synthesis acceptance (A2.2, A2.5, A3.1–A3.2, B2.1–B2.6, G1–G2)
+- [Run #33](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44419479645) on `b1f20a4c5534f3aee7f138bd3efde9d890d4d571`: **PASS** validation + optimized release + actual ONNX smoke. Verified `/healthz`, `/v1/voices`, default, named, alias and fallback voices; full pseudo-stream WAV/PCM; OpenAI WAV/PCM; empty/invalid input; missing model config, missing `voices.npz`, missing `espeak-ng`. All eight synthesis examples generated 64,000 validated non-silent audio samples each.
+- [Run #34](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44419962792) on **`b2df1cd1b1ecef502e24bc67da761ac88c57fff9`**: **PASS** all three jobs, including authenticated real-backend startup and protected `/v1/voices` requests (missing, matching xi-api-key, Bearer, conflicting keys) and OpenAI missing-auth envelope. Rust validation: **95 library + 5 binary + 13 config + 20 HTTP integration = 133 tests, all passing**. The optimized binary was compiled with `--locked --features real-backend`.
+- The low/moderate real-model benchmark in run #34 is actual speech generation through HTTP, not a synthetic inference mock. All **24 requests** succeeded.
+
+| Concurrent clients | Requests | Wall time | Median (p50) | Nearest-rank p95 |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 8/8 | 1.42 s | 0.1759 s | 0.1931 s |
+| 2 | 8/8 | 1.41 s | 0.3492 s | 0.3832 s |
+| 4 | 8/8 | 1.61 s | 0.8039 s | 0.9266 s |
+
+- Peak observed Linux RSS, exact runner/platform data and per-level failed-request diagnostics are written by `tests/benchmark_real_tts.py` to `real-tts-benchmark.json` uploaded as part of `real-model-evidence-<SHA>` in the run #34 artifacts. The numeric RSS value was **not read from the artifact** during this Ralph Bridge review, so do not infer one from the console.
+- Latency increases with client concurrency because one `KittenTTS` backend instance remains serialized behind a mutex. These results establish **correctness for a modest tested load**, not high-scale production capacity or parallel model execution.
+- Run #34 is the **source-code verification SHA** for the latest CI, Rust, and Python script logic. Subsequent documentation-only commits do not change the compiled binary but must have their own CI checked before reporting exact-head status.
+
+### Outstanding scope and user handoff
+- **Python reference:** Ralph Bridge currently has no direct read access to the canonical Python `KittenTTS_server` repository. Obtain the exact repo/ref and equivalent Python runtime to execute `tests/compare_python_rust.py`; no D2 matrix has been run. **Phase 7.10 in `docs/RUST_PORT_TODO.md` remains unchecked.**
+- **Docker:** fresh image build and runtime are **unverified**. The existing `Dockerfile` references the GitHub ORT 1.24.2 archive URL that returned HTTP 404 in GitHub-hosted validation; this is a concrete **risk** requiring a separate Docker build and potential packaging change, not yet a measured Docker test failure.
+- **systemd:** no suitable systemd-capable host/VM runtime test executed. Keep A3.4 open.
+- **Pre-fix reproduction (C1.2–C1.3):** deterministic post-fix starvation tests pass; the pre-fix binary's failure and pre-change performance profile have not been measured.
+- **Admission limits (C2.5):** measured low/moderate load does not establish whether additional bounded backpressure is required; do not silently introduce limits.
+- **Final sign-off:** no claim of Python drop-in replacement readiness or production cutover. Cited green runs are real audio/backend successes, not Python parity results.

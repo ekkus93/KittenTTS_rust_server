@@ -123,9 +123,27 @@ python3 tests/live_backend_smoke.py
 The Python 3 test harness requires no additional packages; it launches the
 release server with an isolated localhost configuration, waits for model
 readiness, generates audio through the ElevenLabs-style and OpenAI-style
-routes, validates WAV/PCM headers and non-silent samples, checks basic errors,
-and terminates the test process. It **fails** when real model prerequisites are
-missing; it is not run by default in CI.
+routes, validates WAV/PCM headers and non-silent samples, checks basic errors
+and authenticated errors, and terminates the test process. It **fails** when
+real model prerequisites are missing; ordinary push/PR CI runs the fast Rust
+suite and Python syntax checks, **not** the live-model smoke test.
+
+The CI workflow also supports an opt-in optimized release build and live ONNX
+test through **Actions → CI → Run workflow** (set `run_real_model: true`;
+optionally `run_benchmark: true`). A commit on `master` explicitly marked
+`[run-real-model]` triggers the same release + smoke path, and adding
+`[run-benchmark]` runs the benchmark; ordinary commits do neither.
+
+The reproducible CI inputs are Ubuntu 26.04, Rust 1.100.0, backend commit
+`df7718161bc68c8b13bea85e879308becf12e87b`, ONNX Runtime 1.24.2
+(extracted from its pinned PyPI wheel), and Hugging Face model
+`KittenML/kitten-tts-nano-0.8-fp32` at
+`e73cfb095bd949c786ccdcf3b8ab04eb36c47442`. Actual model-backed
+WAV/PCM synthesis and auth passed on
+[run #34](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44419962792).
+The separate Python-server parity and Docker/systemd runtime acceptance
+checks remain incomplete; a green model smoke test does **not** establish
+Python drop-in compatibility.
 
 ### Side-by-side Python compatibility comparator
 

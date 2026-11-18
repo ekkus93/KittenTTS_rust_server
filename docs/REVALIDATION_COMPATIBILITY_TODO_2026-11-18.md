@@ -29,16 +29,16 @@
 
 ### A2. Run validation
 - [x] **A2.1** Verify `cargo fmt --check`.
-- [ ] **A2.2** Verify `cargo check --features real-backend`.
+- [x] **A2.2** Verify `cargo check --features real-backend`.
 - [x] **A2.3** Verify `cargo clippy --all-targets --all-features -- -D warnings`.
 - [x] **A2.4** Verify `cargo test --all-features` and record counts/failures; check no test was unintentionally skipped.
-- [ ] **A2.5** Verify `cargo build --release --features real-backend` with the actual sibling checkout.
+- [x] **A2.5** Verify `cargo build --release --features real-backend` with the actual sibling checkout.
 - [x] **A2.6** Trigger or observe a *fresh* GitHub Actions validation for the exact current HEAD; record result, run ID, status, and date.
 - [x] **A2.7** Diagnose and fix any reproducible failure; rerun the exact impacted checks and CI.
 
 ### A3. Release/deployment reproducibility
-- [ ] **A3.1** Review backend checkout nondeterminism and propose a pinned backend-revision strategy; seek required CI-policy approval **before** any workflow changes.
-- [ ] **A3.2** Smoke-test a fresh release binary on Linux with required runtime dependencies, or record the exact environment blocker.
+- [x] **A3.1** Review backend checkout nondeterminism and propose a pinned backend-revision strategy; seek required CI-policy approval **before** any workflow changes.
+- [x] **A3.2** Smoke-test a fresh release binary on Linux with required runtime dependencies, or record the exact environment blocker.
 - [ ] **A3.3** Smoke-test container startup, `/healthz`, real-backend availability, and shutdown if CI resources allow; do not mislabel Docker build-only as runtime coverage.
 - [ ] **A3.4** Validate documented systemd installation in an appropriate host/VM, or mark as **not yet verified** with a reproducible procedure.
 - [x] **A3.5** Record pass/fail/blocker per deployment variant in evidence ledger.
@@ -54,12 +54,12 @@
 - [x] **B1.4** Add WAV/PCM validators: container/header correctness, sample rate/channels, nontrivial duration/sample count, finite/non-silent signal, and PCM byte alignment.
 
 ### B2. Exercise actual engine
-- [ ] **B2.1** Start the full model-backed Rust server; confirm `/healthz` and `/v1/voices`.
-- [ ] **B2.2** Generate and verify WAV for default, explicitly named, and fallback voice paths.
-- [ ] **B2.3** Generate and verify full pseudo-stream body and response headers (WAV; supported PCM variant as applicable).
-- [ ] **B2.4** Generate and verify OpenAI-compatible `/v1/audio/speech` WAV **and** PCM using `model: "tts-1"`.
-- [ ] **B2.5** Check malformed input, protected route auth, and fail-fast missing model/`voices.npz`/`espeak-ng` behavior; isolate configurations as necessary.
-- [ ] **B2.6** Run the live-engine scenario on a documented environment (opt-in GitHub Actions or local runner); capture actual runner, model/ORT revisions, results, and failure logs.
+- [x] **B2.1** Start the full model-backed Rust server; confirm `/healthz` and `/v1/voices`.
+- [x] **B2.2** Generate and verify WAV for default, explicitly named, and fallback voice paths.
+- [x] **B2.3** Generate and verify full pseudo-stream body and response headers (WAV; supported PCM variant as applicable).
+- [x] **B2.4** Generate and verify OpenAI-compatible `/v1/audio/speech` WAV **and** PCM using `model: "tts-1"`.
+- [x] **B2.5** Check malformed input, protected route auth, and fail-fast missing model/`voices.npz`/`espeak-ng` behavior; isolate configurations as necessary.
+- [x] **B2.6** Run the live-engine scenario on a documented environment (opt-in GitHub Actions or local runner); capture actual runner, model/ORT revisions, results, and failure logs.
 - [ ] **B2.7** Address observed real-engine failures and revalidate.
 
 **B acceptance:** real model inference has produced verified nonempty, non-silent, correctly formatted audio on all required routes; mock-only tests do not count.
@@ -82,7 +82,7 @@
 - [x] **C3.1** Test concurrent valid requests with distinct voices/text and validate audio, headers, IDs, and selected voice isolation.
 - [x] **C3.2** Test `/healthz`, invalid input, and authentication while synthesis is in flight; no scheduler starvation/deadlock.
 - [x] **C3.3** Test backend failure/panic recovery and client cancellation where feasible.
-- [ ] **C3.4** Run real-model low/moderate concurrency benchmark: wall time, throughput, p50/p95 latency, peak memory, and hardware/runner description.
+- [x] **C3.4** Run real-model low/moderate concurrency benchmark: wall time, throughput, p50/p95 latency, peak memory, and hardware/runner description.
 - [x] **C3.5** Confirm format, Clippy, existing test suite, and exact-head CI still pass after code changes.
 
 **C acceptance:** deterministic non-starvation tests pass and measured real-model concurrent requests are safe; do not mistake offloading for parallel model execution.
@@ -109,15 +109,15 @@
 - [ ] **D3.2** Run final current-master exact-SHA CI and refreshed real-model smoke suite after changes.
 - [ ] **D3.3** State explicit decision: READY / NOT READY / READY WITH APPROVED WAIVERS, including remaining deployment/operational risks.
 - [ ] **D3.4** Only on supported READY sign-off, mark the outstanding **Phase 7.10** criterion in `docs/RUST_PORT_TODO.md` complete and link the evidence; otherwise leave unchecked.
-- [ ] **D3.5** Update README compatibility/deployment notes to match verified behavior and any approved limitations.
+- [x] **D3.5** Update README compatibility/deployment notes to match verified behavior and any approved limitations.
 
 **D acceptance:** reproducible parity evidence exists, no unapproved client-visible regressions remain, and the legacy acceptance checkbox is updated honestly.
 
 ## Final gate
 
-- [ ] **G1** Fresh exact-master CI + release build verified.
-- [ ] **G2** Real ONNX speech generation validated end to end for WAV and PCM.
-- [ ] **G3** No Tokio worker starvation; concurrency/cancellation tests and measurements recorded.
+- [x] **G1** Fresh exact-master CI + release build verified.
+- [x] **G2** Real ONNX speech generation validated end to end for WAV and PCM.
+- [x] **G3** No Tokio worker starvation; concurrency/cancellation tests and measurements recorded.
 - [ ] **G4** Python-client compatibility matrix complete; differences resolved or explicitly approved.
 - [ ] **G5** Final replacement readiness and Phase 7.10 status match the evidence, with open blockers clearly identified.
 
