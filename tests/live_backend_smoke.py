@@ -82,6 +82,24 @@ def ready(base, process, timeout):
     raise TimeoutError(f"real-backend startup exceeded {timeout}s")
 
 
+def require_startup_failure(binary, env, workdir, model_dir, title, expected):
+    negative_env = env.copy()
+    if model_dir is None:
+        # The from_repo branch must check espeak-ng before downloading models.
+        negative_env.pop("KITTENTTS_SERVER_MODEL_DIR", None)
+        negative_env["PATH"] = str(workdir)
+    else:
+        negative_env["KITTENTTS_SERVER_MODEL_DIR"] = str(model_dir)
+    result = subprocess.run(
+        [str(binary)], env=negative_env, cwd=workdir,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        timeout=20, check=False
+    )
+    require(result.returncode != 0, f"{title}: startup unexpectedly succeeded")
+    require(expected in result.stdout, f"{title}: missing expected error in startup log")
+    print(f"PASS {title} startup fails fast")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", default="target/release/kittentts-server-rs")
@@ -102,6 +120,7 @@ def main():
         "KITTENTTS_SERVER_AUTH_ENABLED": "false",
         "KITTENTTS_SERVER_SAMPLE_RATE": "24000",
         "KITTENTTS_SERVER_CHANNEL_LAYOUT": "mono",
+        "KITTENTTS_SERVER_VOICE_MAP": '{"Narrator":"Jasper"}',
     })
     with tempfile.TemporaryDirectory(prefix="kittentts-smoke-") as workdir:
         log_path = Path(workdir) / "server.log"
@@ -119,6 +138,7 @@ def main():
                 cases = [
                     ("ElevenLabs default WAV", "/v1/text-to-speech", payload, "wav"),
                     ("ElevenLabs Jasper WAV", "/v1/text-to-speech/Jasper", payload, "wav"),
+                    ("ElevenLabs Narrator alias WAV", "/v1/text-to-speech/Narrator", payload, "wav"),
                     ("ElevenLabs unknown fallback WAV", "/v1/text-to-speech/not-a-real-voice", payload, "wav"),
                     ("ElevenLabs streamed WAV", "/v1/text-to-speech/Jasper/stream",
                      {**payload, "output_format": "wav_24000"}, "wav"),
@@ -154,6 +174,30 @@ def main():
                     require(status == 400 and b"error" in body,
                             f"{title}: expected 400 error, got {status}")
                     print(f"PASS {title} rejection")
+
+                # Validate failures using isolated startup processes, not mocked
+                # backend exceptions. No model weights are copied into tests.
+                bad_dir = Path(workdir) / "missing-config"
+                bad_dir.mkdir()
+                require_startup_failure(
+                    binary, env, workdir, bad_dir,
+                    "missing model config", "required backend asset is missing"
+                )
+                missing_voices = Path(workdir) / "missing-voices"
+                missing_voices.mkdir()
+                (missing_voices / "config.json").write_text(
+                    '{"model_file":"stub.onnx","voices":"voices.npz"}',
+                    encoding="utf-8"
+                )
+                (missing_voices / "stub.onnx").write_bytes(b"not an actual model")
+                require_startup_failure(
+                    binary, env, workdir, missing_voices,
+                    "missing voices.npz", "required backend asset is missing"
+                )
+                require_startup_failure(
+                    binary, env, workdir, None,
+                    "missing espeak-ng", "espeak-ng"
+                )
             except BaseException:
                 log.flush()
                 log.seek(0)
