@@ -672,8 +672,14 @@ mod tests {
         assert_eq!(bella.status(), StatusCode::OK);
         assert_eq!(jasper.headers()[CONTENT_TYPE], "audio/wav");
         assert_eq!(bella.headers()[CONTENT_TYPE], "audio/wav");
-        let jasper_id = jasper.headers()["X-Request-Id"].to_str().unwrap().to_string();
-        let bella_id = bella.headers()["X-Request-Id"].to_str().unwrap().to_string();
+        let jasper_id = jasper.headers()["X-Request-Id"]
+            .to_str()
+            .unwrap()
+            .to_string();
+        let bella_id = bella.headers()["X-Request-Id"]
+            .to_str()
+            .unwrap()
+            .to_string();
         assert_ne!(jasper_id, bella_id);
         let jasper_bytes = to_bytes(jasper.into_body(), usize::MAX).await.unwrap();
         let bella_bytes = to_bytes(bella.into_body(), usize::MAX).await.unwrap();
