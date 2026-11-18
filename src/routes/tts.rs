@@ -586,7 +586,11 @@ mod tests {
         let speech = speech_rx.recv_timeout(Duration::from_secs(5));
         assert!(entered.is_ok(), "synthesis never started: {entered:?}");
         assert_eq!(health.ok(), Some(StatusCode::OK), "health request starved");
-        assert_eq!(invalid.ok(), Some(StatusCode::BAD_REQUEST), "validation starved");
+        assert_eq!(
+            invalid.ok(),
+            Some(StatusCode::BAD_REQUEST),
+            "validation starved"
+        );
         assert_eq!(unauth.ok(), Some(StatusCode::UNAUTHORIZED), "auth starved");
         assert_eq!(speech.ok(), Some(StatusCode::OK), "speech did not finish");
     }
