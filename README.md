@@ -624,16 +624,26 @@ The sample unit points `KITTENTTS_SERVER_CONFIG_FILE` at that path.
 library and point `ORT_DYLIB_PATH` at it through `/etc/default/kittentts-server-rs`.
 For example:
 
+The original v1.24.2 GitHub release-archive URL returned **HTTP 404** in
+November 2026. Install the same versioned native library from the PyPI
+`onnxruntime` binary wheel used by the passing GitHub Actions real-model test.
+This uses Python only for extraction; the Rust service does **not** require
+Python at runtime. Install `python3` and `python3-pip` if necessary.
+
 ```bash
+sudo apt-get install -y python3 python3-pip
+onnx_tmp="$(mktemp -d)"
+python3 -m pip download --no-deps --only-binary=:all: \
+  --dest "$onnx_tmp" 'onnxruntime==1.24.2'
+python3 -m zipfile -e "$onnx_tmp"/onnxruntime-*.whl "$onnx_tmp/unpacked"
 sudo install -d /opt/kittentts-server-rs/lib/onnxruntime/1.24.2
-curl -L --fail -o /tmp/onnxruntime-linux-x64-1.24.2.tgz \
-	https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-linux-x64-1.24.2.tgz
-sudo tar -xzf /tmp/onnxruntime-linux-x64-1.24.2.tgz --strip-components=2 \
-	-C /opt/kittentts-server-rs/lib/onnxruntime/1.24.2 \
-	onnxruntime-linux-x64-1.24.2/lib/libonnxruntime.so \
-	onnxruntime-linux-x64-1.24.2/lib/libonnxruntime.so.1.24.2
+for library in "$onnx_tmp"/unpacked/onnxruntime/capi/libonnxruntime*.so*; do
+  sudo install -m 0644 "$library" /opt/kittentts-server-rs/lib/onnxruntime/1.24.2/
+done
+test -s /opt/kittentts-server-rs/lib/onnxruntime/1.24.2/libonnxruntime.so.1.24.2
+rm -rf "$onnx_tmp"
 printf '%s\n' 'ORT_DYLIB_PATH=/opt/kittentts-server-rs/lib/onnxruntime/1.24.2/libonnxruntime.so.1.24.2' \
-	| sudo tee /etc/default/kittentts-server-rs >/dev/null
+  | sudo tee /etc/default/kittentts-server-rs >/dev/null
 ```
 
 You can also add other runtime overrides such as `KITTENTTS_SERVER_LOG_LEVEL`
