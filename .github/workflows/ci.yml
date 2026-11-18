@@ -252,18 +252,26 @@ jobs:
         run: |
           chmod +x dist/kittentts-server-rs
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y ca-certificates curl espeak-ng libgomp1
+          sudo apt-get install --no-install-recommends -y ca-certificates curl espeak-ng libgomp1 python3-pip
 
-      - name: Install exact ONNX Runtime shared library
+      - name: Install pinned ONNX Runtime library from a PyPI binary wheel
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/onnxruntime"
-          url="https://github.com/microsoft/onnxruntime/releases/download/v$ORT_VERSION/onnxruntime-linux-x64-$ORT_VERSION.tgz"
-          curl -fL --retry 3 --retry-all-errors -o "$RUNNER_TEMP/onnxruntime.tgz" "$url"
-          tar -xzf "$RUNNER_TEMP/onnxruntime.tgz" --strip-components=1 \
-            -C "$RUNNER_TEMP/onnxruntime" "onnxruntime-linux-x64-$ORT_VERSION/lib"
-          test -s "$ORT_DYLIB_PATH"
-          sha256sum "$ORT_DYLIB_PATH" | tee "$RUNNER_TEMP/onnxruntime.sha256"
+          # The v1.24.2 GitHub release-asset URL returned HTTP 404 on the
+          # 2026-11-18 GitHub runner. PyPI publishes the same versioned
+          # libonnxruntime.so and its companion provider libraries in a wheel.
+          mkdir -p "$RUNNER_TEMP/onnxruntime-wheel"
+          python3 -m pip download --no-deps --only-binary=:all: \
+            --dest "$RUNNER_TEMP/onnxruntime-wheel" "onnxruntime==$ORT_VERSION"
+          wheel="$(find "$RUNNER_TEMP/onnxruntime-wheel" -maxdepth 1 -type f -name 'onnxruntime-*.whl' -print -quit)"
+          test -n "$wheel"
+          python3 -m zipfile -e "$wheel" "$RUNNER_TEMP/onnxruntime-extracted"
+          library="$(find "$RUNNER_TEMP/onnxruntime-extracted/onnxruntime/capi" -maxdepth 1 \
+            -type f -name 'libonnxruntime.so*' -print -quit)"
+          test -n "$library" && test -s "$library"
+          echo "ORT_DYLIB_PATH=$library" >> "$GITHUB_ENV"
+          sha256sum "$wheel" "$library" | tee "$RUNNER_TEMP/onnxruntime.sha256"
+          echo "ONNX Runtime $ORT_VERSION extracted from a versioned PyPI wheel" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Resolve exact Hugging Face model revision
         env:
