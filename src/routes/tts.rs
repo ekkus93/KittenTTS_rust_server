@@ -548,6 +548,111 @@ mod tests {
         assert_eq!(speech.ok(), Some(StatusCode::OK), "speech did not finish");
     }
 
+    #[test]
+    fn cancelled_http_request_does_not_corrupt_synthesis_state() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::{mpsc, Condvar};
+        use std::time::Duration;
+
+        struct CancelAwareSynth {
+            started: mpsc::Sender<()>,
+            released: Arc<(Mutex<bool>, Condvar)>,
+            model_lock: Mutex<()>,
+            calls: AtomicUsize,
+        }
+
+        impl Synthesizer for CancelAwareSynth {
+            fn list_voices(&self) -> Vec<String> {
+                vec!["Jasper".to_string()]
+            }
+
+            fn synthesize(
+                &self,
+                request: &InternalSynthesisRequest,
+            ) -> Result<SynthResult, AppError> {
+                let _model_guard = self.model_lock.lock().unwrap();
+                if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                    self.started.send(()).expect("test receiver is available");
+                    let (lock, ready) = &*self.released;
+                    let mut released = lock.lock().unwrap();
+                    while !*released {
+                        released = ready.wait(released).unwrap();
+                    }
+                }
+                Ok(SynthResult {
+                    audio: FloatAudioBuffer {
+                        waveform: vec![0.0, 0.2, -0.2, 0.4],
+                        sample_rate: 24_000,
+                        channels: 1,
+                    },
+                    voice: request.voice_id.clone().unwrap_or_default(),
+                })
+            }
+        }
+
+        let (started_tx, started_rx) = mpsc::channel();
+        let released = Arc::new((Mutex::new(false), Condvar::new()));
+        let app = crate::routes::build_router(AppState::from_runtime(
+            crate::config::Settings::default(),
+            test_runtime(CancelAwareSynth {
+                started: started_tx,
+                released: Arc::clone(&released),
+                model_lock: Mutex::new(()),
+                calls: AtomicUsize::new(0),
+            }),
+        ));
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .unwrap();
+        let cancelled_app = app.clone();
+        let cancelled = runtime.spawn(async move {
+            cancelled_app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/v1/text-to-speech")
+                        .header("content-type", "application/json")
+                        .body(Body::from(r#"{"text":"cancelled request"}"#))
+                        .unwrap(),
+                )
+                .await
+        });
+
+        let first_started = started_rx.recv_timeout(Duration::from_secs(5));
+        cancelled.abort();
+        {
+            let (lock, ready) = &*released;
+            *lock.lock().unwrap() = true;
+            ready.notify_all();
+        }
+
+        let (second_tx, second_rx) = mpsc::channel();
+        runtime.spawn(async move {
+            let result = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/v1/text-to-speech")
+                        .header("content-type", "application/json")
+                        .body(Body::from(r#"{"text":"following request"}"#))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let _ = second_tx.send(result.status());
+        });
+        let second_status = second_rx.recv_timeout(Duration::from_secs(5));
+        assert!(first_started.is_ok(), "first synthesis never started");
+        assert_eq!(
+            second_status.ok(),
+            Some(StatusCode::OK),
+            "backend unusable after cancellation"
+        );
+    }
+
     #[tokio::test]
     async fn panicking_blocking_task_becomes_internal_application_error() {
         let error = run_blocking_tts(|| panic!("deliberate test panic"))
