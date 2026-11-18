@@ -7,13 +7,34 @@ on:
     tags:
       - "v*"
   pull_request:
+  workflow_dispatch:
+    inputs:
+      run_real_model:
+        description: "Run live ONNX model-backed HTTP smoke tests"
+        type: boolean
+        default: false
+      run_benchmark:
+        description: "Benchmark real-model inference (requires run_real_model)"
+        type: boolean
+        default: false
+      model_revision:
+        description: "Exact Hugging Face model commit SHA or main (resolved per run)"
+        type: string
+        default: "main"
 
 permissions:
   contents: read
 
+# Record immutable backend and toolchain revisions for reproducible builds.
+# Change these deliberately, not as an incidental default-branch update.
+env:
+  BACKEND_SHA: "df7718161bc68c8b13bea85e879308becf12e87b"
+  ORT_VERSION: "1.24.2"
+  MODEL_REPO: "KittenML/kitten-tts-nano-0.8-fp32"
+
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out Rust server repo
         uses: actions/checkout@v4
@@ -23,6 +44,13 @@ jobs:
         with:
           repository: ekkus93/kitten_tts_rs
           path: kitten_tts_rs
+          ref: df7718161bc68c8b13bea85e879308becf12e87b
+
+      - name: Confirm backend revision
+        run: |
+          actual="$(git -C kitten_tts_rs rev-parse HEAD)"
+          test "$actual" = "$BACKEND_SHA"
+          echo "server=$GITHUB_SHA backend=$actual" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Expose sibling backend path dependency
         run: ln -s "$GITHUB_WORKSPACE/kitten_tts_rs" "$GITHUB_WORKSPACE/../kitten_tts_rs"
@@ -42,6 +70,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: "1.100.0"
           components: rustfmt, clippy
 
       - name: Cache Cargo registry and build outputs
@@ -50,16 +79,22 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check
 
+      - name: Compile real-backend feature
+        run: cargo check --features real-backend
+
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Run tests
         run: cargo test --all-features
 
+      - name: Validate opt-in Python harness syntax
+        run: python3 -m py_compile tests/live_backend_smoke.py tests/compare_python_rust.py tests/benchmark_real_tts.py
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -71,6 +106,13 @@ jobs:
         with:
           repository: ekkus93/kitten_tts_rs
           path: kitten_tts_rs
+          ref: df7718161bc68c8b13bea85e879308becf12e87b
+
+      - name: Confirm backend revision
+        run: |
+          actual="$(git -C kitten_tts_rs rev-parse HEAD)"
+          test "$actual" = "$BACKEND_SHA"
+          echo "server=$GITHUB_SHA backend=$actual" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Expose sibling backend path dependency
         run: ln -s "$GITHUB_WORKSPACE/kitten_tts_rs" "$GITHUB_WORKSPACE/../kitten_tts_rs"
@@ -87,6 +129,8 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.100.0"
 
       - name: Cache Cargo registry and build outputs
         uses: Swatinem/rust-cache@v2
@@ -125,3 +169,180 @@ jobs:
             dist/kittentts-server-rs-linux-x86_64
             dist/kittentts-server-rs-linux-x86_64.tar.gz
             dist/sha256sums.txt
+
+  # workflow_dispatch intentionally opts into the expensive optimized build.
+  # No new tag is minted and nothing is published from this job.
+  verify_release:
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out server at dispatched revision
+        uses: actions/checkout@v4
+
+      - name: Check out reviewed backend revision
+        uses: actions/checkout@v4
+        with:
+          repository: ekkus93/kitten_tts_rs
+          path: kitten_tts_rs
+          ref: df7718161bc68c8b13bea85e879308becf12e87b
+
+      - name: Check backend identity and expose sibling dependency
+        run: |
+          test "$(git -C kitten_tts_rs rev-parse HEAD)" = "$BACKEND_SHA"
+          ln -s "$GITHUB_WORKSPACE/kitten_tts_rs" "$GITHUB_WORKSPACE/../kitten_tts_rs"
+
+      - name: Install compilation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y clang cmake libssl-dev pkg-config
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.100.0"
+
+      - name: Cache Cargo registry and build outputs
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build optimized real-backend binary
+        run: cargo build --release --locked --features real-backend
+
+      - name: Record release-build provenance
+        run: |
+          echo "server=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "backend=$BACKEND_SHA" >> "$GITHUB_STEP_SUMMARY"
+          rustc --version | tee -a "$GITHUB_STEP_SUMMARY"
+          sha256sum target/release/kittentts-server-rs | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload release binary for opt-in model tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-backend-binary-${{ github.sha }}
+          path: target/release/kittentts-server-rs
+          retention-days: 3
+          if-no-files-found: error
+
+  real_model:
+    # Deliberately does not run on push, pull request or release tags.
+    if: github.event_name == 'workflow_dispatch' && inputs.run_real_model == true
+    needs: verify_release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      ORT_DYLIB_PATH: "${{ runner.temp }}/onnxruntime/lib/libonnxruntime.so.1.24.2"
+      KITTENTTS_SERVER_MODEL_DIR: "${{ runner.temp }}/kittentts-model"
+      KITTENTTS_SERVER_AUTH_ENABLED: "false"
+    steps:
+      - name: Check out server scripts at dispatched revision
+        uses: actions/checkout@v4
+
+      - name: Download exactly validated release binary
+        uses: actions/download-artifact@v4
+        with:
+          name: real-backend-binary-${{ github.sha }}
+          path: dist
+
+      - name: Prepare executable and required OS libraries
+        run: |
+          chmod +x dist/kittentts-server-rs
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ca-certificates curl espeak-ng libgomp1
+
+      - name: Install exact ONNX Runtime shared library
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/onnxruntime"
+          url="https://github.com/microsoft/onnxruntime/releases/download/v$ORT_VERSION/onnxruntime-linux-x64-$ORT_VERSION.tgz"
+          curl -fL --retry 3 --retry-all-errors -o "$RUNNER_TEMP/onnxruntime.tgz" "$url"
+          tar -xzf "$RUNNER_TEMP/onnxruntime.tgz" --strip-components=1 \
+            -C "$RUNNER_TEMP/onnxruntime" "onnxruntime-linux-x64-$ORT_VERSION/lib"
+          test -s "$ORT_DYLIB_PATH"
+          sha256sum "$ORT_DYLIB_PATH" | tee "$RUNNER_TEMP/onnxruntime.sha256"
+
+      - name: Resolve exact Hugging Face model revision
+        env:
+          MODEL_REVISION_REQUESTED: "${{ inputs.model_revision }}"
+        run: |
+          set -euo pipefail
+          if [[ "$MODEL_REVISION_REQUESTED" == "main" || -z "$MODEL_REVISION_REQUESTED" ]]; then
+            model_sha="$(curl -fLsS --retry 3 "https://huggingface.co/api/models/$MODEL_REPO" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["sha"])')"
+          else
+            model_sha="$MODEL_REVISION_REQUESTED"
+          fi
+          [[ "$model_sha" =~ ^[a-fA-F0-9]{40}$ ]] || { echo "Model revision must be an exact commit SHA or main"; exit 1; }
+          echo "MODEL_SHA=$model_sha" >> "$GITHUB_ENV"
+          echo "Resolved $MODEL_REPO to immutable revision $model_sha"
+
+      - name: Cache model files at resolved revision
+        uses: actions/cache@v4
+        with:
+          path: "${{ runner.temp }}/kittentts-model"
+          key: kitten-nano-fp32-${{ env.MODEL_SHA }}
+
+      - name: Fetch model assets from immutable revision
+        run: |
+          set -euo pipefail
+          mkdir -p "$KITTENTTS_SERVER_MODEL_DIR"
+          url="https://huggingface.co/$MODEL_REPO/resolve/$MODEL_SHA"
+          curl -fL --retry 3 --retry-all-errors -o "$KITTENTTS_SERVER_MODEL_DIR/config.json" "$url/config.json"
+          model_file="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["model_file"])' "$KITTENTTS_SERVER_MODEL_DIR/config.json")"
+          voice_file="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["voices"])' "$KITTENTTS_SERVER_MODEL_DIR/config.json")"
+          # Keep downloaded assets inside the temp model directory.
+          [[ "$model_file" != */* && "$voice_file" != */* && -n "$model_file" && -n "$voice_file" ]] || exit 1
+          for name in "$model_file" "$voice_file"; do
+            if [[ ! -s "$KITTENTTS_SERVER_MODEL_DIR/$name" ]]; then
+              curl -fL --retry 3 --retry-all-errors -o "$KITTENTTS_SERVER_MODEL_DIR/$name" "$url/$name"
+            fi
+            test -s "$KITTENTTS_SERVER_MODEL_DIR/$name"
+          done
+          echo "model_repo=$MODEL_REPO model_sha=$MODEL_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "server=$GITHUB_SHA backend=$BACKEND_SHA ort=$ORT_VERSION" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run actual ONNX HTTP WAV/PCM smoke test
+        run: |
+          set -euo pipefail
+          python3 tests/live_backend_smoke.py \
+            --binary dist/kittentts-server-rs --startup-timeout 300 --request-timeout 180 \
+            2>&1 | tee "$RUNNER_TEMP/live-model-smoke.log"
+
+      - name: Benchmark real ONNX inference (optional)
+        if: inputs.run_benchmark == true
+        env:
+          KITTENTTS_SERVER_HOST: "127.0.0.1"
+          KITTENTTS_SERVER_PORT: "8009"
+        run: |
+          set -euo pipefail
+          dist/kittentts-server-rs > "$RUNNER_TEMP/benchmark-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 150); do
+            kill -0 "$server_pid" || { cat "$RUNNER_TEMP/benchmark-server.log"; exit 1; }
+            if curl -fsS "http://127.0.0.1:8009/healthz" | grep -q '"model_loaded":true'; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          [[ "$ready" == 1 ]] || { echo "benchmark server not ready"; exit 1; }
+          python3 tests/benchmark_real_tts.py \
+            --url "http://127.0.0.1:8009" --requests 8 --concurrency 1 2 4 \
+            --pid "$server_pid" --server-ref "$GITHUB_SHA" \
+            --backend-ref "$BACKEND_SHA" --model-ref "$MODEL_SHA" \
+            --output "$RUNNER_TEMP/real-tts-benchmark.json"
+
+      - name: Upload bounded test evidence (never model weights or synthesized audio)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-model-evidence-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/live-model-smoke.log
+            ${{ runner.temp }}/onnxruntime.sha256
+            ${{ runner.temp }}/real-tts-benchmark.json
+            ${{ runner.temp }}/benchmark-server.log
+          if-no-files-found: warn
+          retention-days: 7
