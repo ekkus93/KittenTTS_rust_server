@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM rust:1.88-bookworm AS builder
+FROM rust:1.100.0-bookworm AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -19,21 +19,19 @@ COPY --from=kitten_tts_rs / ./../kitten_tts_rs
 
 RUN cargo build --release --features real-backend
 
-FROM debian:bookworm-slim AS onnxruntime
+# Use the same verified native ONNX Runtime distribution as live CI.
+# The v1.24.2 archive at the upstream GitHub release URL returns HTTP 404.
+# Extract only shared libraries; Python itself is not in the final image.
+FROM python:3.13-slim-bookworm AS onnxruntime
 
-ARG DEBIAN_FRONTEND=noninteractive
 ARG ONNXRUNTIME_VERSION=1.24.2
 
-WORKDIR /tmp
-
-RUN apt-get update \
-    && apt-get install --no-install-recommends -y ca-certificates curl tar \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN curl -L --fail -o onnxruntime.tgz "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}.tgz" \
-    && mkdir -p /onnxruntime \
-    && tar -xzf onnxruntime.tgz --strip-components=1 -C /onnxruntime \
-        "onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}/lib"
+RUN mkdir -p /tmp/wheels /onnxruntime/lib \
+    && python -m pip download --no-deps --only-binary=:all: \
+         --dest /tmp/wheels "onnxruntime==${ONNXRUNTIME_VERSION}" \
+    && python -m zipfile -e /tmp/wheels/onnxruntime-*.whl /tmp/extracted \
+    && cp /tmp/extracted/onnxruntime/capi/libonnxruntime*.so* /onnxruntime/lib/ \
+    && test -s "/onnxruntime/lib/libonnxruntime.so.${ONNXRUNTIME_VERSION}"
 
 FROM debian:bookworm-slim AS runtime
 
@@ -55,9 +53,7 @@ RUN apt-get update \
     && install -d -o elkitten -g elkitten /app/config /home/elkitten/.cache/huggingface /home/elkitten/.config/pulse /home/elkitten/.local/share/onnxruntime/${ONNXRUNTIME_VERSION}
 
 COPY --from=builder /workspace/KittenTTS_rust_server/target/release/kittentts-server-rs /usr/local/bin/kittentts-server-rs
-COPY --from=onnxruntime /onnxruntime/lib/libonnxruntime.so /home/elkitten/.local/share/onnxruntime/${ONNXRUNTIME_VERSION}/libonnxruntime.so
-COPY --from=onnxruntime /onnxruntime/lib/libonnxruntime.so.1 /home/elkitten/.local/share/onnxruntime/${ONNXRUNTIME_VERSION}/libonnxruntime.so.1
-COPY --from=onnxruntime /onnxruntime/lib/libonnxruntime.so.${ONNXRUNTIME_VERSION} /home/elkitten/.local/share/onnxruntime/${ONNXRUNTIME_VERSION}/libonnxruntime.so.${ONNXRUNTIME_VERSION}
+COPY --from=onnxruntime /onnxruntime/lib/ /home/elkitten/.local/share/onnxruntime/${ONNXRUNTIME_VERSION}/
 COPY --chown=elkitten:elkitten config ./config
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 

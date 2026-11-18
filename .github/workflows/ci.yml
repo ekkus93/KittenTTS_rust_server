@@ -17,6 +17,10 @@ on:
         description: "Benchmark real-model inference (requires run_real_model)"
         type: boolean
         default: false
+      run_docker:
+        description: "Build and smoke-test the Docker image (requires run_real_model)"
+        type: boolean
+        default: false
       model_revision:
         description: "Exact Hugging Face model commit SHA or main (resolved per run)"
         type: string
@@ -351,6 +355,44 @@ jobs:
             --backend-ref "$BACKEND_SHA" --model-ref "$MODEL_SHA" \
             --output "$RUNNER_TEMP/real-tts-benchmark.json"
 
+      - name: Check out reviewed backend for container build (optional)
+        if: inputs.run_docker == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-docker]'))
+        uses: actions/checkout@v4
+        with:
+          repository: ekkus93/kitten_tts_rs
+          ref: df7718161bc68c8b13bea85e879308becf12e87b
+          path: kitten_tts_rs
+
+      - name: Build Docker image and test actual model-backed speech (optional)
+        if: inputs.run_docker == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-docker]'))
+        run: |
+          set -euo pipefail
+          test "$(git -C kitten_tts_rs rev-parse HEAD)" = "$BACKEND_SHA"
+          docker buildx build --load \
+            --build-context kitten_tts_rs=./kitten_tts_rs \
+            --tag kittentts-rs:ci --build-arg "ONNXRUNTIME_VERSION=$ORT_VERSION" .
+          docker run --detach --rm --name kittentts-rs-validation \
+            --publish 127.0.0.1:18008:8008 \
+            --mount "type=bind,source=$KITTENTTS_SERVER_MODEL_DIR,target=/models,readonly" \
+            --env KITTENTTS_SERVER_MODEL_DIR=/models \
+            kittentts-rs:ci
+          trap 'docker logs kittentts-rs-validation > "$RUNNER_TEMP/docker-server.log" 2>&1 || true; docker rm -f kittentts-rs-validation >/dev/null 2>&1 || true' EXIT
+          ready=0
+          for attempt in $(seq 1 120); do
+            docker inspect --format '{{.State.Running}}' kittentts-rs-validation | grep -qx true || { docker logs kittentts-rs-validation; exit 1; }
+            if curl -fsS "http://127.0.0.1:18008/healthz" | grep -q '"model_loaded":true'; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1 || { docker logs kittentts-rs-validation; exit 1; }
+          python3 tests/benchmark_real_tts.py \
+            --url http://127.0.0.1:18008 --concurrency 1 --requests 2 \
+            --server-ref "$GITHUB_SHA" --backend-ref "$BACKEND_SHA" \
+            --model-ref "$MODEL_SHA" --output "$RUNNER_TEMP/docker-tts-smoke.json"
+          echo "Docker image built and served real, validated WAV audio" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload bounded test evidence (never model weights or synthesized audio)
         if: always()
         uses: actions/upload-artifact@v4
@@ -361,5 +403,7 @@ jobs:
             ${{ runner.temp }}/onnxruntime.sha256
             ${{ runner.temp }}/real-tts-benchmark.json
             ${{ runner.temp }}/benchmark-server.log
+            ${{ runner.temp }}/docker-tts-smoke.json
+            ${{ runner.temp }}/docker-server.log
           if-no-files-found: warn
           retention-days: 7
