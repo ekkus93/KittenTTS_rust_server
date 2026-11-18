@@ -170,10 +170,11 @@ jobs:
             dist/kittentts-server-rs-linux-x86_64.tar.gz
             dist/sha256sums.txt
 
-  # workflow_dispatch intentionally opts into the expensive optimized build.
+  # Expensive validation is opt-in: workflow_dispatch, or an explicitly marked
+  # commit on master. The normal push pipeline remains lint/test only.
   # No new tag is minted and nothing is published from this job.
   verify_release:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master' && contains(github.event.head_commit.message, '[run-real-model]'))
     needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -225,8 +226,8 @@ jobs:
           if-no-files-found: error
 
   real_model:
-    # Deliberately does not run on push, pull request or release tags.
-    if: github.event_name == 'workflow_dispatch' && inputs.run_real_model == true
+    # Run only via explicit dispatch or opt-in commit marker on master.
+    if: (github.event_name == 'workflow_dispatch' && inputs.run_real_model == true) || (github.event_name == 'push' && github.ref == 'refs/heads/master' && contains(github.event.head_commit.message, '[run-real-model]'))
     needs: verify_release
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -312,7 +313,7 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/live-model-smoke.log"
 
       - name: Benchmark real ONNX inference (optional)
-        if: inputs.run_benchmark == true
+        if: inputs.run_benchmark == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-benchmark]'))
         env:
           KITTENTTS_SERVER_HOST: "127.0.0.1"
           KITTENTTS_SERVER_PORT: "8009"
