@@ -557,6 +557,132 @@ mod tests {
         assert!(error.message.contains("speech synthesis task failed"));
     }
 
+    #[tokio::test]
+    async fn blocking_backend_panic_uses_route_specific_error_envelopes() {
+        struct PanickingSynthesizer;
+
+        impl Synthesizer for PanickingSynthesizer {
+            fn list_voices(&self) -> Vec<String> {
+                vec!["Jasper".to_string()]
+            }
+
+            fn synthesize(
+                &self,
+                _request: &InternalSynthesisRequest,
+            ) -> Result<SynthResult, AppError> {
+                panic!("deliberate backend panic")
+            }
+        }
+
+        let app = crate::routes::build_router(AppState::from_runtime(
+            crate::config::Settings::default(),
+            test_runtime(PanickingSynthesizer),
+        ));
+
+        let local = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/text-to-speech")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"text":"hello"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(local.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(local.headers().get("X-Request-Id").is_some());
+        let local_body = to_bytes(local.into_body(), usize::MAX).await.unwrap();
+        let local_json: serde_json::Value = serde_json::from_slice(&local_body).unwrap();
+        assert!(local_json["error"]["code"].is_string());
+
+        let openai = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/audio/speech")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"model":"tts-1","voice":"Jasper","input":"hello"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(openai.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(openai.headers().get("X-Request-Id").is_some());
+        let openai_body = to_bytes(openai.into_body(), usize::MAX).await.unwrap();
+        let openai_json: serde_json::Value = serde_json::from_slice(&openai_body).unwrap();
+        assert!(openai_json["error"]["type"].is_string());
+    }
+
+    #[tokio::test]
+    async fn concurrent_tts_requests_keep_voice_audio_and_request_ids_distinct() {
+        struct VoiceTaggedSynthesizer;
+
+        impl Synthesizer for VoiceTaggedSynthesizer {
+            fn list_voices(&self) -> Vec<String> {
+                vec!["Jasper".to_string(), "Bella".to_string()]
+            }
+
+            fn synthesize(
+                &self,
+                request: &InternalSynthesisRequest,
+            ) -> Result<SynthResult, AppError> {
+                let tone = if request.voice_id.as_deref() == Some("Bella") {
+                    0.7
+                } else {
+                    0.2
+                };
+                Ok(SynthResult {
+                    audio: FloatAudioBuffer {
+                        waveform: vec![0.0, tone, -tone, 0.0],
+                        sample_rate: 24_000,
+                        channels: 1,
+                    },
+                    voice: request.voice_id.clone().unwrap_or_default(),
+                })
+            }
+        }
+
+        let app = crate::routes::build_router(AppState::from_runtime(
+            crate::config::Settings::default(),
+            test_runtime(VoiceTaggedSynthesizer),
+        ));
+        let jasper_request = Request::builder()
+            .method("POST")
+            .uri("/v1/text-to-speech/Jasper")
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"text":"Jasper request"}"#))
+            .unwrap();
+        let bella_request = Request::builder()
+            .method("POST")
+            .uri("/v1/text-to-speech/Bella")
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"text":"Bella request"}"#))
+            .unwrap();
+        let (jasper_result, bella_result) = tokio::join!(
+            app.clone().oneshot(jasper_request),
+            app.oneshot(bella_request)
+        );
+        let jasper = jasper_result.unwrap();
+        let bella = bella_result.unwrap();
+        assert_eq!(jasper.status(), StatusCode::OK);
+        assert_eq!(bella.status(), StatusCode::OK);
+        assert_eq!(jasper.headers()[CONTENT_TYPE], "audio/wav");
+        assert_eq!(bella.headers()[CONTENT_TYPE], "audio/wav");
+        let jasper_id = jasper.headers()["X-Request-Id"].to_str().unwrap().to_string();
+        let bella_id = bella.headers()["X-Request-Id"].to_str().unwrap().to_string();
+        assert_ne!(jasper_id, bella_id);
+        let jasper_bytes = to_bytes(jasper.into_body(), usize::MAX).await.unwrap();
+        let bella_bytes = to_bytes(bella.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(&jasper_bytes[0..4], b"RIFF");
+        assert_eq!(&bella_bytes[0..4], b"RIFF");
+        // The sample after the zero-valued first frame encodes the chosen voice.
+        assert_ne!(&jasper_bytes[46..48], &bella_bytes[46..48]);
+    }
+
     #[test]
     fn normalize_output_format_trims_lowercases_and_rejects_blank_values() {
         assert_eq!(
