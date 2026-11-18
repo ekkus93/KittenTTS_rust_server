@@ -34,7 +34,7 @@ env:
 
 jobs:
   validate:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Check out Rust server repo
         uses: actions/checkout@v4
@@ -94,7 +94,7 @@ jobs:
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: validate
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
     steps:
@@ -176,7 +176,7 @@ jobs:
   verify_release:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master' && contains(github.event.head_commit.message, '[run-real-model]'))
     needs: validate
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     steps:
       - name: Check out server at dispatched revision
@@ -229,7 +229,7 @@ jobs:
     # Run only via explicit dispatch or opt-in commit marker on master.
     if: (github.event_name == 'workflow_dispatch' && inputs.run_real_model == true) || (github.event_name == 'push' && github.ref == 'refs/heads/master' && contains(github.event.head_commit.message, '[run-real-model]'))
     needs: verify_release
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     env:
       KITTENTTS_SERVER_AUTH_ENABLED: "false"
