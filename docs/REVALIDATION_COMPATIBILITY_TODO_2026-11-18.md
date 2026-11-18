@@ -1,12 +1,14 @@
 # KittenTTS Rust Server — Revalidation and Compatibility TODO
 
 **Created:** 2026-11-18  
-**Status:** All follow-up tasks pending fresh evidence  
+**Status:** In progress; completed tasks cite `docs/REVALIDATION_EVIDENCE.md`  
 **Specification:** [REVALIDATION_COMPATIBILITY_SPEC_2026-11-18.md](REVALIDATION_COMPATIBILITY_SPEC_2026-11-18.md)  
 **Original port tracker:** [RUST_PORT_TODO.md](RUST_PORT_TODO.md) (Phase 7.10 remains unchecked)  
 **Working branch:** `master`; perform exact-head reads and compare-and-swap commits; no task branches or PRs unless explicitly requested.
 
 > All checkboxes below begin unchecked. Existing March 2026 tests and release artifacts are historical baseline, **not** acceptance evidence for November revalidation. Never mark a task done merely because CI was green eight months ago.
+
+**Evidence ledger:** [REVALIDATION_EVIDENCE.md](REVALIDATION_EVIDENCE.md) (exact SHAs, CI, blockers, and partial validation)
 
 ## Operating rules for each implementation pass
 
@@ -21,35 +23,35 @@
 ## A. Refresh build/test/CI evidence — P0
 
 ### A1. Inventory and baseline
-- [ ] **A1.1** Capture exact current server `master` SHA, backend `kitten_tts_rs` SHA, default branch/tag state, and current CI runs.
-- [ ] **A1.2** Inspect `Cargo.toml`, `Cargo.lock`, workflow, `Dockerfile`, documented ONNX Runtime/`espeak-ng` requirements; enumerate reproducibility gaps.
-- [ ] **A1.3** Start an evidence ledger with baseline toolchain, OS, backend revision, environment, commands, and CI links.
+- [x] **A1.1** Capture exact current server `master` SHA, backend `kitten_tts_rs` SHA, default branch/tag state, and current CI runs.
+- [x] **A1.2** Inspect `Cargo.toml`, `Cargo.lock`, workflow, `Dockerfile`, documented ONNX Runtime/`espeak-ng` requirements; enumerate reproducibility gaps.
+- [x] **A1.3** Start an evidence ledger with baseline toolchain, OS, backend revision, environment, commands, and CI links.
 
 ### A2. Run validation
-- [ ] **A2.1** Verify `cargo fmt --check`.
+- [x] **A2.1** Verify `cargo fmt --check`.
 - [ ] **A2.2** Verify `cargo check --features real-backend`.
-- [ ] **A2.3** Verify `cargo clippy --all-targets --all-features -- -D warnings`.
-- [ ] **A2.4** Verify `cargo test --all-features` and record counts/failures; check no test was unintentionally skipped.
+- [x] **A2.3** Verify `cargo clippy --all-targets --all-features -- -D warnings`.
+- [x] **A2.4** Verify `cargo test --all-features` and record counts/failures; check no test was unintentionally skipped.
 - [ ] **A2.5** Verify `cargo build --release --features real-backend` with the actual sibling checkout.
 - [ ] **A2.6** Trigger or observe a *fresh* GitHub Actions validation for the exact current HEAD; record result, run ID, status, and date.
-- [ ] **A2.7** Diagnose and fix any reproducible failure; rerun the exact impacted checks and CI.
+- [x] **A2.7** Diagnose and fix any reproducible failure; rerun the exact impacted checks and CI.
 
 ### A3. Release/deployment reproducibility
 - [ ] **A3.1** Review backend checkout nondeterminism and propose a pinned backend-revision strategy; seek required CI-policy approval **before** any workflow changes.
 - [ ] **A3.2** Smoke-test a fresh release binary on Linux with required runtime dependencies, or record the exact environment blocker.
 - [ ] **A3.3** Smoke-test container startup, `/healthz`, real-backend availability, and shutdown if CI resources allow; do not mislabel Docker build-only as runtime coverage.
 - [ ] **A3.4** Validate documented systemd installation in an appropriate host/VM, or mark as **not yet verified** with a reproducible procedure.
-- [ ] **A3.5** Record pass/fail/blocker per deployment variant in evidence ledger.
+- [x] **A3.5** Record pass/fail/blocker per deployment variant in evidence ledger.
 
 **A acceptance:** exact-current-HEAD validation is green with a reproducible server/backend/environment provenance; release build and deployment outcomes are reported without overstating coverage.
 
 ## B. Real ONNX synthesis and audio checks — P0
 
 ### B1. Harness and prerequisites
-- [ ] **B1.1** Design a repeatable opt-in live-server test harness using `--features real-backend`, `espeak-ng`, ONNX Runtime, and real model assets; document cache/local-path setup and license/network limits.
-- [ ] **B1.2** Create minimal short-text test fixtures for default voice, known voice/alias, unknown fallback, stream, and OpenAI WAV/PCM.
-- [ ] **B1.3** Make startup readiness, bounded test timeouts, teardown, diagnostics, and explicit prerequisites deterministic; no silent success/skip for missing model assets.
-- [ ] **B1.4** Add WAV/PCM validators: container/header correctness, sample rate/channels, nontrivial duration/sample count, finite/non-silent signal, and PCM byte alignment.
+- [x] **B1.1** Design a repeatable opt-in live-server test harness using `--features real-backend`, `espeak-ng`, ONNX Runtime, and real model assets; document cache/local-path setup and license/network limits.
+- [x] **B1.2** Create minimal short-text test fixtures for default voice, known voice/alias, unknown fallback, stream, and OpenAI WAV/PCM.
+- [x] **B1.3** Make startup readiness, bounded test timeouts, teardown, diagnostics, and explicit prerequisites deterministic; no silent success/skip for missing model assets.
+- [x] **B1.4** Add WAV/PCM validators: container/header correctness, sample rate/channels, nontrivial duration/sample count, finite/non-silent signal, and PCM byte alignment.
 
 ### B2. Exercise actual engine
 - [ ] **B2.1** Start the full model-backed Rust server; confirm `/healthz` and `/v1/voices`.
@@ -65,14 +67,14 @@
 ## C. Synthesis concurrency and async responsiveness — P1
 
 ### C1. Reproduce the risk
-- [ ] **C1.1** Trace sync call path in `src/routes/tts.rs` and `src/services/synth.rs`; identify where inference blocks Tokio and where backend `Mutex<KittenTTS>` is held.
+- [x] **C1.1** Trace sync call path in `src/routes/tts.rs` and `src/services/synth.rs`; identify where inference blocks Tokio and where backend `Mutex<KittenTTS>` is held.
 - [ ] **C1.2** Add a deterministic blocking fake synthesizer/gate test: one in-flight synthesis and an independently responsive `/healthz`; prove the test catches the pre-fix behavior.
 - [ ] **C1.3** Record before measurements for 1, 2, and a modest simultaneous-request count; note CI worker constraints.
 
 ### C2. Minimal safe remediation
-- [ ] **C2.1** Move synchronous TTS work to an appropriate `spawn_blocking` boundary; preserve request validation, response shape and voice resolution.
+- [x] **C2.1** Move synchronous TTS work to an appropriate `spawn_blocking` boundary; preserve request validation, response shape and voice resolution.
 - [ ] **C2.2** Preserve local and OpenAI error-envelope distinctions and request IDs on backend, panic/join, validation, and authorization failures.
-- [ ] **C2.3** Keep a single backend instance with safe mutex ownership unless measurements justify a larger change; explicitly verify no lock is held over an `.await`.
+- [x] **C2.3** Keep a single backend instance with safe mutex ownership unless measurements justify a larger change; explicitly verify no lock is held over an `.await`.
 - [ ] **C2.4** Document what happens if an HTTP client disconnects during blocking inference; prevent corruption, race conditions, and accidental cross-request state.
 - [ ] **C2.5** If bounded admission/backpressure is necessary, document its tradeoffs and obtain approval for any outward-facing behavior change.
 
@@ -81,7 +83,7 @@
 - [ ] **C3.2** Test `/healthz`, invalid input, and authentication while synthesis is in flight; no scheduler starvation/deadlock.
 - [ ] **C3.3** Test backend failure/panic recovery and client cancellation where feasible.
 - [ ] **C3.4** Run real-model low/moderate concurrency benchmark: wall time, throughput, p50/p95 latency, peak memory, and hardware/runner description.
-- [ ] **C3.5** Confirm format, Clippy, existing test suite, and exact-head CI still pass after code changes.
+- [x] **C3.5** Confirm format, Clippy, existing test suite, and exact-head CI still pass after code changes.
 
 **C acceptance:** deterministic non-starvation tests pass and measured real-model concurrent requests are safe; do not mistake offloading for parallel model execution.
 
