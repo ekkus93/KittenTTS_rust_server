@@ -231,10 +231,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
-      ORT_DYLIB_PATH: "${{ runner.temp }}/onnxruntime/lib/libonnxruntime.so.1.24.2"
-      KITTENTTS_SERVER_MODEL_DIR: "${{ runner.temp }}/kittentts-model"
       KITTENTTS_SERVER_AUTH_ENABLED: "false"
     steps:
+      - name: Set runner-local model and ONNX paths
+        run: |
+          echo "ORT_DYLIB_PATH=$RUNNER_TEMP/onnxruntime/lib/libonnxruntime.so.1.24.2" >> "$GITHUB_ENV"
+          echo "KITTENTTS_SERVER_MODEL_DIR=$RUNNER_TEMP/kittentts-model" >> "$GITHUB_ENV"
+
       - name: Check out server scripts at dispatched revision
         uses: actions/checkout@v4
 
