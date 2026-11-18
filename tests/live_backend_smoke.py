@@ -28,9 +28,10 @@ def free_port():
         return sock.getsockname()[1]
 
 
-def exchange(url, method="GET", payload=None, timeout=120):
+def exchange(url, method="GET", payload=None, timeout=120, extra_headers=None):
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
     headers = {"Content-Type": "application/json"} if data is not None else {}
+    headers.update(extra_headers or {})
     request = Request(url, data=data, headers=headers, method=method)
     try:
         with urlopen(request, timeout=timeout) as response:
@@ -98,6 +99,66 @@ def require_startup_failure(binary, env, workdir, model_dir, title, expected):
     require(result.returncode != 0, f"{title}: startup unexpectedly succeeded")
     require(expected in result.stdout, f"{title}: missing expected error in startup log")
     print(f"PASS {title} startup fails fast")
+
+
+def check_authenticated_routes(binary, env, workdir, startup_timeout):
+    # Use an independent real-backend process. Public health stays accessible;
+    # protected routes must reject missing and conflicting credentials.
+    auth_env = env.copy()
+    port = free_port()
+    auth_env["KITTENTTS_SERVER_PORT"] = str(port)
+    auth_env["KITTENTTS_SERVER_AUTH_ENABLED"] = "true"
+    auth_env["KITTENTTS_SERVER_LOCAL_API_KEY"] = "test-only-ci-secret"
+    base = f"http://127.0.0.1:{port}"
+    with (Path(workdir) / "auth-server.log").open("w+") as log:
+        process = subprocess.Popen(
+            [str(binary)], env=auth_env, cwd=workdir,
+            stdout=log, stderr=subprocess.STDOUT
+        )
+        try:
+            ready(base, process, startup_timeout)
+            status, _headers, body = exchange(base + "/v1/voices")
+            require(status == 401 and b"error" in body,
+                    f"missing auth must return 401, got {status}")
+            status, _headers, body = exchange(
+                base + "/v1/voices",
+                extra_headers={"xi-api-key": "test-only-ci-secret"}
+            )
+            require(status == 200, f"valid xi-api-key rejected: {status}: {body[:120]!r}")
+            status, _headers, body = exchange(
+                base + "/v1/voices",
+                extra_headers={"Authorization": "Bearer test-only-ci-secret"}
+            )
+            require(status == 200, f"valid Bearer rejected: {status}: {body[:120]!r}")
+            status, _headers, body = exchange(
+                base + "/v1/voices",
+                extra_headers={
+                    "xi-api-key": "test-only-ci-secret",
+                    "Authorization": "Bearer conflicting-value"
+                }
+            )
+            require(status == 401 and b"error" in body,
+                    f"conflicting auth must return 401, got {status}")
+            status, _headers, body = exchange(
+                base + "/v1/audio/speech", method="POST",
+                payload={"model": "tts-1", "voice": "Jasper", "input": "hello"}
+            )
+            require(status == 401 and json.loads(body)["error"]["type"] == "invalid_request_error",
+                    "OpenAI auth error envelope invalid")
+            print("PASS real-backend auth: missing, xi-api-key, Bearer, conflict and OpenAI envelope")
+        except BaseException:
+            log.flush()
+            log.seek(0)
+            sys.stderr.write("Auth server diagnostic log (final 4000 characters):\n")
+            sys.stderr.write(log.read()[-4000:] + "\n")
+            raise
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
 
 
 def main():
@@ -198,6 +259,7 @@ def main():
                     binary, env, workdir, None,
                     "missing espeak-ng", "espeak-ng"
                 )
+                check_authenticated_routes(binary, env, workdir, args.startup_timeout)
             except BaseException:
                 log.flush()
                 log.seek(0)

@@ -20,7 +20,7 @@ on:
       model_revision:
         description: "Exact Hugging Face model commit SHA or main (resolved per run)"
         type: string
-        default: "main"
+        default: "e73cfb095bd949c786ccdcf3b8ab04eb36c47442"
 
 permissions:
   contents: read
