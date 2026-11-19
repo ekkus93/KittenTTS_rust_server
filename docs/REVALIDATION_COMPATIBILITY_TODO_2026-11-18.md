@@ -60,7 +60,7 @@
 - [x] **B2.4** Generate and verify OpenAI-compatible `/v1/audio/speech` WAV **and** PCM using `model: "tts-1"`.
 - [x] **B2.5** Check malformed input, protected route auth, and fail-fast missing model/`voices.npz`/`espeak-ng` behavior; isolate configurations as necessary.
 - [x] **B2.6** Run the live-engine scenario on a documented environment (opt-in GitHub Actions or local runner); capture actual runner, model/ORT revisions, results, and failure logs.
-- [ ] **B2.7** Address observed real-engine failures and revalidate.
+- [x] **B2.7** Address observed real-engine failures and revalidate.
 
 **B acceptance:** real model inference has produced verified nonempty, non-silent, correctly formatted audio on all required routes; mock-only tests do not count.
 
@@ -90,22 +90,22 @@
 ## D. Python compatibility and replacement acceptance — P1
 
 ### D1. Define apples-to-apples parity
-- [ ] **D1.1** Capture exact Python `KittenTTS_server` revision and equivalent Rust/backend/model/voice config.
+- [x] **D1.1** Capture exact Python `KittenTTS_server` revision and equivalent Rust/backend/model/voice config.
 - [x] **D1.2** Build a repeatable request corpus and comparator with explicit normalizations (JSON key order, transient request ID/timestamps).
 - [x] **D1.3** Define explicit PASS / FAIL / WAIVED / BLOCKED classification and artifact/evidence format before testing.
 
 ### D2. Execute route matrix
-- [ ] **D2.1** Compare `/healthz` metadata and `/v1/voices` inventory/descriptor fields.
-- [ ] **D2.2** Compare ElevenLabs-style default, named, alias, unknown/fallback voices.
-- [ ] **D2.3** Compare stream status, headers, negotiated WAV/PCM formats and decoded body, respecting pseudo-stream semantics.
+- [x] **D2.1** Compare `/healthz` metadata and `/v1/voices` inventory/descriptor fields.
+- [x] **D2.2** Compare ElevenLabs-style default, named, alias, unknown/fallback voices.
+- [x] **D2.3** Compare stream status, headers, negotiated WAV/PCM formats and decoded body, respecting pseudo-stream semantics.
 - [ ] **D2.4** Compare OpenAI WAV and PCM success, invalid model/input and OpenAI-style error envelopes.
-- [ ] **D2.5** Compare missing/valid/invalid/conflicting authentication and `X-Request-Id` semantics.
+- [x] **D2.5** Compare missing/valid/invalid/conflicting authentication and `X-Request-Id` semantics.
 - [ ] **D2.6** Compare strict vs permissive validation, unsupported formats, JSON-vs-env precedence, default and custom sample rate/channel configuration.
 - [ ] **D2.7** Compare multi-chunk/long text, speed changes, voice behavior, and audio validity/quality (not exact waveform hashes).
-- [ ] **D2.8** Publish dated case-by-case matrix and record every material difference with reproduction and classification.
+- [x] **D2.8** Publish dated case-by-case matrix and record every material difference with reproduction and classification.
 
 ### D3. Final decision
-- [ ] **D3.1** Fix material compatibility regressions and rerun relevant tests; explicitly request approval for any remaining material waiver.
+- [x] **D3.1** Fix material compatibility regressions and rerun relevant tests; explicitly request approval for any remaining material waiver.
 - [ ] **D3.2** Run final current-master exact-SHA CI and refreshed real-model smoke suite after changes.
 - [ ] **D3.3** State explicit decision: READY / NOT READY / READY WITH APPROVED WAIVERS, including remaining deployment/operational risks.
 - [ ] **D3.4** Only on supported READY sign-off, mark the outstanding **Phase 7.10** criterion in `docs/RUST_PORT_TODO.md` complete and link the evidence; otherwise leave unchecked.

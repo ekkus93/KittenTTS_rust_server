@@ -143,3 +143,48 @@ Evidence refers to **specific source commits and runs**, not a blanket statement
 - The model-backed systemd test log reported 2/2 WAV calls in 0.68 s wall time; p50 0.3393 s and p95 0.3451 s on this CI runner. This is only a bounded smoke check, not a claim of production SLA or verification on a specific user's physical host.
 - A3.4 **complete** for the documented installation and lifecycle on the test VM. Both A3.3 and A3.4 are now supported by actual CI runtime evidence.
 - **Python follow-up:** canonical repository `ekkus93/KittenTTS_server` still cannot be read through Ralph Bridge's current repo scope; direct `get_repo_state` and `get_file` returned `INVALID_ARGUMENT`. A separate opt-in, read-only GitHub Actions reference probe was added to resolve the Python source's exact default branch, commit, dependency manifests, and entrypoint metadata if publicly accessible. The probe is not a Python parity test and must not close D1.1 or D2 unless actual comparison is subsequently executed.
+
+
+## 2026-11-19 — Full Python-vs-Rust real-model API parity: default, auth and strict
+
+### Exact inputs and execution
+- Original Python reference: `ekkus93/KittenTTS_server` master, pinned **`0e49fd2ae1baa3f2c9b007c12a962b5d99bb55c7`**. Probe and checkout verified via GitHub Actions; Python 3.11, dependencies installed from its `requirements.txt` in an isolated virtual environment (FastAPI/Uvicorn/Pydantic/KittenTTS wheel). Backend: `ekkus93/kitten_tts_rs` **`df7718161bc68c8b13bea85e879308becf12e87b`**. Model: `KittenML/kitten-tts-nano-0.8-fp32` at **`e73cfb095bd949c786ccdcf3b8ab04eb36c47442`**. ORT: **1.24.2**.
+- Rust comparison source commit: **`8c67a5b85cd092a6940693c5b60c00a4ef19c094`**, Python reference unchanged. GitHub Actions [run #53](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44634413093) **PASS**, including formatting, Clippy, feature compilation, `cargo test --all-features`, optimized binary build, live-model HTTP smoke, and three separate Python-vs-Rust sessions.
+- Shared runtime settings: localhost, 24 kHz mono, default `jasper`, matching `Narrator` → `Jasper` voice alias, same model assets and API contract. Auth mode enabled with **test-only** key (never a production secret); strict mode enabled in an independent pair of processes. All sessions checked `/healthz` `model_loaded=true` on **both** real servers before comparing. Each case validates response status, media type, format headers, normalized error JSON, request-ID presence and WAV/PCM structural correctness. Audio sample counts, transfer framing and engine diagnostic fields are recorded as observations and are **not** required to be byte-for-byte identical.
+
+### Dated per-case response matrix (run #53)
+| Case | Default | Auth enabled | Strict mode |
+| --- | --- | --- | --- |
+| `healthz` | PASS | PASS | PASS |
+| `voices` | PASS | PASS | PASS |
+| `eleven_default` | PASS | PASS | PASS |
+| `eleven_named` | PASS | PASS | PASS |
+| `eleven_alias` | PASS | PASS | PASS |
+| `eleven_unknown` | PASS | PASS | PASS |
+| `stream_wav` | PASS | PASS | PASS |
+| `stream_pcm` | PASS | PASS | PASS |
+| `openai_wav` | PASS | PASS | PASS |
+| `openai_pcm` | PASS | PASS | PASS |
+| `empty_text` | PASS | PASS | PASS |
+| `invalid_openai_model` | PASS | PASS | PASS |
+| `invalid_format` | PASS | PASS | PASS |
+| `long_text` | PASS | PASS | PASS |
+| `speed` | PASS | PASS | PASS |
+| `missing_auth` | — | PASS | — |
+| `wrong_auth` | — | PASS | — |
+| `conflicting_auth` | — | PASS | — |
+| `strict_extra_fields` | — | — | PASS |
+
+**Aggregates:** default **15 PASS / 0 FAIL / 0 BLOCKED**; authenticated **18 / 0 / 0**; strict **16 / 0 / 0**; total **49 PASS / 0 FAIL / 0 BLOCKED**. JSON case-by-case artifacts `parity-default.json`, `parity-authenticated.json`, `parity-strict.json` and bounded process logs are uploaded in [run #53](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44634413093). This completes D1.1, D2.1, D2.2, D2.3, D2.5, D2.8 for the **measured** configurations; it is not a claim of universal feature equivalence.
+
+### Material mismatches identified and resolved (D3.1)
+1. Original model schema mismatch: [run #43](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44498061254), default mode **14 PASS / 1 FAIL**, Python invalid OpenAI model → HTTP **422**, code `validation_error`, type `invalid_request_error`, generic `Request validation failed`; Rust returned 400 and exposed Serde's enum text. Changed **only request-schema** errors on Rust OpenAI route to match Python, preserving domain error HTTP 400. Verified in run #46 (15/15 default).
+2. Strict unsupported format: [run #48](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44632810849), default 15/15 and auth 18/18; strict **15 PASS / 1 FAIL**, Python `mp3` → `unsupported_output_format`, `details.output_format="mp3"`; Rust used `validation_error` without details. Added matching Rust error code/details for strict ElevenLabs and pseudo-stream routes, updated older Rust integration tests, and reran run #53: **all strict cases pass**.
+3. Validation infrastructure issues during this iteration: Python venv interpreter symlink was incorrectly dereferenced in the multi-mode runner, bypassing its installed packages (run #47); fixed using an absolute non-resolved executable path. Test expectations for a dynamic request ID and Rust formatting were corrected. These are recorded as harness problems, **not** Python-versus-Rust compatibility failures.
+4. No material differences remain among the **49 tested cases**. No waivers were requested or silently granted; untested variants remain explicit follow-up tasks. Historical ONNX download failures were fixed and revalidated in real model CI, supporting B2.7.
+
+### Still unverified after this stage
+- D2.4: invalid OpenAI **input** and additional schema errors have not been compared; do not equate the invalid-model case with the entire OpenAI request-validation matrix.
+- D2.6: custom sample rate/channel and config JSON-vs-env precedence have not yet been compared. Strict extra-field behavior **was** compared.
+- D2.7: the long-text and speed scenarios passed, but no explicit multi-chunk boundary/subjective audio-quality evaluation has been performed.
+- D3.2–D3.4, G4–G5 and original Phase 7.10: **remain open** pending fuller compatibility and explicit sign-off. There is no claim of production-cutover readiness solely from run #53.
