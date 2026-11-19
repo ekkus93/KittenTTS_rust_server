@@ -111,6 +111,7 @@ def corpus(auth_mode, strict):
         {"name": "voices", "path": "/v1/voices"},
         {"name": "eleven_default", "method": "POST", "path": "/v1/text-to-speech", "json": eleven},
         {"name": "eleven_named", "method": "POST", "path": "/v1/text-to-speech/Jasper", "json": eleven},
+        {"name": "eleven_alias", "method": "POST", "path": "/v1/text-to-speech/Narrator", "json": eleven},
         {"name": "eleven_unknown", "method": "POST", "path": "/v1/text-to-speech/unknown-voice", "json": eleven},
         {"name": "stream_wav", "method": "POST", "path": "/v1/text-to-speech/Jasper/stream",
          "json": {**eleven, "output_format": "wav_24000"}},
