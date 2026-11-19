@@ -45,7 +45,7 @@ def normalized_json(value):
     return value
 
 
-def summarize(case, result, rate):
+def summarize(case, result, rate, channels):
     status, headers, body, elapsed = result
     kind = headers.get_content_type()
     output = {
@@ -58,10 +58,10 @@ def summarize(case, result, rate):
         "transfer_encoding": headers.get("Transfer-Encoding"),
     }
     if kind == "audio/wav" and status == 200:
-        output["frames"] = validate_wav(body, channels=1, rate=rate)
+        output["frames"] = validate_wav(body, channels=channels, rate=rate)
         output["audio_kind"] = "wav"
     elif kind == "audio/pcm" and status == 200:
-        output["frames"] = validate_pcm(body, channels=1, rate=rate)
+        output["frames"] = validate_pcm(body, channels=channels, rate=rate)
         output["audio_kind"] = "pcm"
     else:
         try:
@@ -102,7 +102,7 @@ def compare_signatures(case, py, rs):
     return ("FAIL" if mismatches else "PASS"), mismatches, observations
 
 
-def corpus(auth_mode, strict):
+def corpus(auth_mode, strict, rate, api_key):
     words = "This is a short speech parity test."
     eleven = {"text": words, "model_id": "kitten-local"}
     openai = {"model": "tts-1", "voice": "Jasper", "input": words}
@@ -114,9 +114,9 @@ def corpus(auth_mode, strict):
         {"name": "eleven_alias", "method": "POST", "path": "/v1/text-to-speech/Narrator", "json": eleven},
         {"name": "eleven_unknown", "method": "POST", "path": "/v1/text-to-speech/unknown-voice", "json": eleven},
         {"name": "stream_wav", "method": "POST", "path": "/v1/text-to-speech/Jasper/stream",
-         "json": {**eleven, "output_format": "wav_24000"}},
+         "json": {**eleven, "output_format": f"wav_{rate}"}},
         {"name": "stream_pcm", "method": "POST", "path": "/v1/text-to-speech/Jasper/stream",
-         "json": {**eleven, "output_format": "pcm_24000"}},
+         "json": {**eleven, "output_format": f"pcm_{rate}"}},
         {"name": "openai_wav", "method": "POST", "path": "/v1/audio/speech",
          "json": {**openai, "response_format": "wav"}},
         {"name": "openai_pcm", "method": "POST", "path": "/v1/audio/speech",
@@ -124,22 +124,37 @@ def corpus(auth_mode, strict):
         {"name": "empty_text", "method": "POST", "path": "/v1/text-to-speech", "json": {"text": ""}},
         {"name": "invalid_openai_model", "method": "POST", "path": "/v1/audio/speech",
          "json": {**openai, "model": "not-a-model"}},
+        {"name": "openai_empty_input", "method": "POST", "path": "/v1/audio/speech",
+         "json": {**openai, "input": ""}},
+        {"name": "openai_missing_voice", "method": "POST", "path": "/v1/audio/speech",
+         "json": {"model": "tts-1", "input": words}},
         {"name": "invalid_format", "method": "POST", "path": "/v1/text-to-speech",
          "json": {**eleven, "output_format": "mp3"}},
         {"name": "long_text", "method": "POST", "path": "/v1/text-to-speech",
          "json": {**eleven, "text": (words + " ") * 10}},
+        {"name": "multi_chunk_text", "method": "POST", "path": "/v1/text-to-speech",
+         "json": {**eleven, "text": (words + " ") * 35}},
         {"name": "speed", "method": "POST", "path": "/v1/text-to-speech/Jasper",
          "json": {**eleven, "voice_settings": {"speed": 1.2}}},
     ]
     if strict:
         cases.append({"name": "strict_extra_fields", "method": "POST",
                       "path": "/v1/text-to-speech", "json": {**eleven, "extra_field": True}})
+        cases.append({"name": "strict_extra_voice_setting", "method": "POST",
+                      "path": "/v1/text-to-speech",
+                      "json": {**eleven, "voice_settings": {"unrecognized_setting": 1}}})
     if auth_mode == "enabled":
         cases += [
             {"name": "missing_auth", "path": "/v1/voices"},
             {"name": "wrong_auth", "path": "/v1/voices", "headers": {"xi-api-key": "not-a-key"}},
             {"name": "conflicting_auth", "path": "/v1/voices", "headers":
              {"xi-api-key": "one", "Authorization": "Bearer two"}},
+            {"name": "valid_bearer", "path": "/v1/voices", "skip_default_auth": True,
+             "headers": {"Authorization": "Bearer " + api_key}},
+            {"name": "wrong_bearer", "path": "/v1/voices", "skip_default_auth": True,
+             "headers": {"Authorization": "Bearer incorrect-test-key"}},
+            {"name": "matching_both_headers", "path": "/v1/voices",
+             "headers": {"Authorization": "Bearer " + api_key}},
         ]
     return cases
 
@@ -156,28 +171,31 @@ def main():
     parser.add_argument("--api-key", help="common API key, required when auth is enabled")
     parser.add_argument("--strict", action="store_true", help="both servers run strict mode")
     parser.add_argument("--sample-rate", type=int, default=24000)
+    parser.add_argument("--channels", type=int, choices=(1, 2), default=1)
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--output", default="parity-report.json")
     args = parser.parse_args()
     if args.auth_mode == "enabled" and not args.api_key:
         parser.error("--api-key is mandatory with --auth-mode enabled")
-    cases = corpus(args.auth_mode, args.strict)
+    cases = corpus(args.auth_mode, args.strict, args.sample_rate, args.api_key)
     report = {
         "metadata": {"python_ref": args.python_ref, "rust_ref": args.rust_ref,
                      "backend_ref": args.backend_ref, "model_ref": args.model_ref,
                      "auth_mode": args.auth_mode, "strict": args.strict,
-                     "sample_rate": args.sample_rate},
+                     "sample_rate": args.sample_rate, "channels": args.channels},
         "results": [],
     }
     for case in cases:
         c = dict(case)
-        if args.auth_mode == "enabled" and case["name"] not in (
-                "missing_auth", "wrong_auth", "conflicting_auth", "healthz"):
+        if (args.auth_mode == "enabled"
+                and not case.get("skip_default_auth", False)
+                and case["name"] not in (
+                    "missing_auth", "wrong_auth", "conflicting_auth", "healthz")):
             c["headers"] = {**c.get("headers", {}), "xi-api-key": args.api_key}
         record = {"name": case["name"]}
         try:
-            py = summarize(c, request(args.python_url, c, args.timeout), args.sample_rate)
-            rs = summarize(c, request(args.rust_url, c, args.timeout), args.sample_rate)
+            py = summarize(c, request(args.python_url, c, args.timeout), args.sample_rate, args.channels)
+            rs = summarize(c, request(args.rust_url, c, args.timeout), args.sample_rate, args.channels)
             outcome, mismatches, observations = compare_signatures(c, py, rs)
             record.update({"status": outcome, "mismatches": mismatches,
                            "observations": observations,

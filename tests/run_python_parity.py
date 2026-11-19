@@ -20,9 +20,12 @@ from urllib.request import urlopen
 
 AUTH_TEST_KEY = "ci-parity-test-only-key"
 MODES = (
-    ("default", False, False),
-    ("authenticated", True, False),
-    ("strict", False, True),
+    # name, auth, strict, sample_rate, output_channels, JSON-over-env override
+    ("default", False, False, 24000, 1, False),
+    ("authenticated", True, False, 24000, 1, False),
+    ("strict", False, True, 24000, 1, False),
+    ("stereo_22050", False, False, 22050, 2, False),
+    ("json_precedence", False, False, 22050, 2, True),
 )
 
 
@@ -63,7 +66,7 @@ def stop(proc):
         proc.wait(timeout=5)
 
 
-def run_mode(args, mode, auth, strict):
+def run_mode(args, mode, auth, strict, rate, channels, json_precedence):
     a, b = free_port(), free_port()
     if a == b:
         b = free_port()
@@ -81,8 +84,9 @@ def run_mode(args, mode, auth, strict):
         "KITTENTTS_SERVER_AUTH_ENABLED": "true" if auth else "false",
         "KITTENTTS_SERVER_LOCAL_API_KEY": AUTH_TEST_KEY,
         "KITTENTTS_SERVER_STRICT_MODE": "true" if strict else "false",
-        "KITTENTTS_SERVER_SAMPLE_RATE": "24000",
-        "KITTENTTS_SERVER_CHANNEL_LAYOUT": "mono",
+        "KITTENTTS_SERVER_SAMPLE_RATE": "24000" if json_precedence else str(rate),
+        "KITTENTTS_SERVER_CHANNEL_LAYOUT": ("mono" if json_precedence
+                                            else "stereo" if channels == 2 else "mono"),
         "KITTENTTS_SERVER_VOICE_MAP": '{"Narrator":"Jasper"}',
     })
     launched = []
@@ -95,6 +99,16 @@ def run_mode(args, mode, auth, strict):
         )
         for label, command, cwd, port in commands:
             env = dict(base, KITTENTTS_SERVER_PORT=str(port))
+            if json_precedence:
+                # Deliberately conflict with environment values; the JSON file
+                # must win (22050 Hz stereo over env 24000 Hz mono).
+                configfile = resultdir / f"parity-{mode}-{label}.settings.json"
+                configfile.write_text(
+                    json.dumps({"sample_rate": rate,
+                                "channel_layout": "stereo" if channels == 2 else "mono"}) + "\n",
+                    encoding="utf-8",
+                )
+                env["KITTENTTS_SERVER_CONFIG_FILE"] = str(configfile)
             logfile = resultdir / f"parity-{mode}-{label}.log"
             handle = logfile.open("w", encoding="utf-8")
             try:
@@ -127,6 +141,7 @@ def run_mode(args, mode, auth, strict):
             "--backend-ref", args.backend_ref,
             "--model-ref", args.model_ref,
             "--timeout", str(args.request_timeout),
+            "--sample-rate", str(rate), "--channels", str(channels),
             "--output", str(resultdir / f"parity-{mode}.json"),
         ]
         if auth:
@@ -159,8 +174,8 @@ def main():
     parser.add_argument("--suite-timeout", type=int, default=900)
     args = parser.parse_args()
     results = {}
-    for mode, auth, strict in MODES:
-        results[mode] = run_mode(args, mode, auth, strict)
+    for mode, auth, strict, rate, channels, json_precedence in MODES:
+        results[mode] = run_mode(args, mode, auth, strict, rate, channels, json_precedence)
     print("Parity modes: " + json.dumps(results, sort_keys=True), flush=True)
     if not all(results.values()):
         raise SystemExit(1)
