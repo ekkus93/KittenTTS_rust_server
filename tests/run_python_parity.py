@@ -69,7 +69,9 @@ def run_mode(args, mode, auth, strict):
         b = free_port()
     source = Path(args.python_dir).resolve()
     binary = Path(args.rust_binary).resolve()
-    python = Path(args.python_executable).resolve()
+    # Do not dereference a venv's bin/python symlink: resolving it to the
+    # system interpreter bypasses the venv's installed FastAPI/KittenTTS.
+    python = Path(args.python_executable).absolute()
     resultdir = Path(args.output_dir).resolve()
     resultdir.mkdir(parents=True, exist_ok=True)
     base = dict(os.environ)
@@ -103,8 +105,18 @@ def run_mode(args, mode, auth, strict):
             finally:
                 handle.close()
             launched.append((label, proc, logfile, port))
-        for label, proc, _log, port in launched:
-            ready(port, proc, args.startup_timeout)
+        for label, proc, log_path, port in launched:
+            try:
+                ready(port, proc, args.startup_timeout)
+            except (OSError, RuntimeError, TimeoutError) as error:
+                # Bound diagnostics to prevent log leakage on CI failure.
+                try:
+                    diagnostics = log_path.read_text(encoding="utf-8")[-3000:]
+                except OSError:
+                    diagnostics = "<log unavailable>"
+                print(f"{mode}: {label} startup failed: {error}", flush=True)
+                print(f"{mode}: {label} diagnostics: {diagnostics}", flush=True)
+                raise
             print(f"{mode}: {label} real model loaded", flush=True)
         cmd = [
             sys.executable, str(Path(__file__).with_name("compare_python_rust.py")),
