@@ -1392,7 +1392,7 @@ mod tests {
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(parsed["error"]["code"], "missing_input");
-        assert_eq!(parsed["error"]["type"], "missing_input");
+        assert_eq!(parsed["error"]["type"], "invalid_request_error");
         assert_eq!(parsed["error"]["message"], "input is required");
     }
 }

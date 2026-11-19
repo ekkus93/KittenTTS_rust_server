@@ -140,10 +140,12 @@ impl AppError {
     }
 
     pub fn into_openai_envelope(&self) -> OpenAiErrorEnvelope {
-        // Python/FastAPI request-schema errors use "invalid_request_error"
-        // even though their stable code remains "validation_error".
-        let error_type = if self.status == StatusCode::UNPROCESSABLE_ENTITY
-            && self.code == AppErrorCode::Validation
+        // Python/FastAPI uses this category for both schema-validation
+        // errors (422) and missing OpenAI input (400), while preserving the
+        // precise code for clients that distinguish individual conditions.
+        let error_type = if (self.status == StatusCode::UNPROCESSABLE_ENTITY
+            && self.code == AppErrorCode::Validation)
+            || self.code == AppErrorCode::MissingInput
         {
             "invalid_request_error"
         } else {
@@ -198,7 +200,7 @@ mod tests {
 
         assert_eq!(envelope.error.code.as_deref(), Some("missing_input"));
         assert_eq!(envelope.error.message, "input is required");
-        assert_eq!(envelope.error.error_type, "missing_input");
+        assert_eq!(envelope.error.error_type, "invalid_request_error");
     }
 
     #[test]
