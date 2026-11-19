@@ -237,6 +237,20 @@ fn synthesize_audio(
     float_audio_to_pcm(&synth_result.audio)
 }
 
+fn unsupported_output_format(output_format: &str) -> AppError {
+    let mut details = std::collections::BTreeMap::new();
+    details.insert(
+        "output_format".to_string(),
+        Value::String(output_format.to_string()),
+    );
+    AppError::new(
+        StatusCode::BAD_REQUEST,
+        AppErrorCode::UnsupportedOutputFormat,
+        format!("Unsupported output_format: {output_format}"),
+    )
+    .with_details(details)
+}
+
 fn negotiate_output_format(
     requested_output_format: Option<&str>,
     configured_output_format: &str,
@@ -252,9 +266,7 @@ fn negotiate_output_format(
     }
 
     if strict_mode {
-        return Err(AppError::validation(format!(
-            "Unsupported output_format: {output_format}"
-        )));
+        return Err(unsupported_output_format(&output_format));
     }
 
     Ok(configured_output_format.to_string())
@@ -288,9 +300,7 @@ fn negotiate_stream_format(
     }
 
     if strict_mode {
-        return Err(AppError::validation(format!(
-            "Unsupported output_format: {output_format}"
-        )));
+        return Err(unsupported_output_format(&output_format));
     }
 
     Ok(StreamFormat {
@@ -1294,8 +1304,17 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let body_text = String::from_utf8(body.to_vec()).unwrap();
-        assert!(body_text.contains("Unsupported output_format"));
+        let json_body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            json_body,
+            json!({
+                "error": {
+                    "code": "unsupported_output_format",
+                    "message": "Unsupported output_format: mp3",
+                    "details": {"output_format": "mp3"}
+                }
+            })
+        );
     }
 
     #[tokio::test]
