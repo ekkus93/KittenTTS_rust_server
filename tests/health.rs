@@ -502,7 +502,10 @@ async fn strict_text_to_speech_invalid_output_format_matches_python_error() {
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body_json: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(body_json["error"]["code"], "unsupported_output_format");
-    assert_eq!(body_json["error"]["message"], "Unsupported output_format: mp3");
+    assert_eq!(
+        body_json["error"]["message"],
+        "Unsupported output_format: mp3"
+    );
     assert_eq!(body_json["error"]["details"]["output_format"], "mp3");
     assert!(body_json["error"]["request_id"].is_string());
 }
@@ -535,7 +538,10 @@ async fn strict_stream_invalid_output_format_matches_python_error() {
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body_json: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(body_json["error"]["code"], "unsupported_output_format");
-    assert_eq!(body_json["error"]["message"], "Unsupported output_format: mp3");
+    assert_eq!(
+        body_json["error"]["message"],
+        "Unsupported output_format: mp3"
+    );
     assert_eq!(body_json["error"]["details"]["output_format"], "mp3");
     assert!(body_json["error"]["request_id"].is_string());
 }
