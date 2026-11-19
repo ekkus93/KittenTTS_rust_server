@@ -224,16 +224,25 @@ def main():
                             f"{title}: missing X-Output-Format")
                     require(headers.get("X-Request-Id"), f"{title}: missing request ID")
                     print(f"PASS {title}: {frames} samples")
-                for title, path, bad in [
-                    ("empty ElevenLabs text", "/v1/text-to-speech", {"text": ""}),
+                for title, path, bad, expected_status, expected_openai in [
+                    ("empty ElevenLabs text", "/v1/text-to-speech", {"text": ""}, 400, False),
                     ("invalid OpenAI model", "/v1/audio/speech",
-                     {"model": "invalid", "voice": "Jasper", "input": "hello"}),
+                     {"model": "invalid", "voice": "Jasper", "input": "hello"}, 422, True),
                 ]:
-                    status, _headers, body = exchange(
+                    status, headers, body = exchange(
                         base + path, "POST", bad, args.request_timeout
                     )
-                    require(status == 400 and b"error" in body,
-                            f"{title}: expected 400 error, got {status}")
+                    require(status == expected_status and b"error" in body,
+                            f"{title}: expected {expected_status} error, got {status}")
+                    require(headers.get("X-Request-Id"), f"{title}: missing request ID")
+                    if expected_openai:
+                        require(json.loads(body) == {
+                            "error": {
+                                "code": "validation_error",
+                                "message": "Request validation failed",
+                                "type": "invalid_request_error",
+                            }
+                        }, f"{title}: unexpected OpenAI schema-validation envelope")
                     print(f"PASS {title} rejection")
 
                 # Validate failures using isolated startup processes, not mocked
