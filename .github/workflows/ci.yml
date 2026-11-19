@@ -21,6 +21,10 @@ on:
         description: "Build and smoke-test the Docker image (requires run_real_model)"
         type: boolean
         default: false
+      run_systemd:
+        description: "Install and exercise the real model through systemd (requires run_real_model)"
+        type: boolean
+        default: false
       model_revision:
         description: "Exact Hugging Face model commit SHA or main (resolved per run)"
         type: string
@@ -393,6 +397,78 @@ jobs:
             --model-ref "$MODEL_SHA" --output "$RUNNER_TEMP/docker-tts-smoke.json"
           echo "Docker image built and served real, validated WAV audio" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Install and smoke-test actual systemd service (optional)
+        if: inputs.run_systemd == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-systemd]'))
+        run: |
+          set -euo pipefail
+          # GitHub-hosted Ubuntu is a VM. Explicitly require systemd as PID 1:
+          # testing a process launched directly would not be a service test.
+          test "$(ps -p 1 -o comm= | tr -d '[:space:]')" = systemd || {
+            echo "This runner does not boot systemd as PID 1"; exit 1;
+          }
+          unit=kittentts-server-rs.service
+          root=/opt/kittentts-server-rs
+          cleanup() {
+            sudo journalctl -u "$unit" --no-pager -n 150 > "$RUNNER_TEMP/systemd-journal.log" 2>&1 || true
+            sudo systemctl stop "$unit" 2>/dev/null || true
+            sudo systemctl disable "$unit" 2>/dev/null || true
+            sudo rm -f "/etc/systemd/system/$unit" /etc/default/kittentts-server-rs
+            sudo systemctl daemon-reload || true
+          }
+          trap cleanup EXIT
+          if ! id -u kittentts-server >/dev/null 2>&1; then
+            sudo useradd --system --home-dir "$root" --shell /usr/sbin/nologin kittentts-server
+          fi
+          sudo install -d -o kittentts-server -g kittentts-server \
+            "$root" "$root/bin" "$root/config" "$root/models/nano" \
+            "$root/.cache/huggingface" "$root/lib/onnxruntime/$ORT_VERSION"
+          sudo install -m 0755 dist/kittentts-server-rs "$root/bin/kittentts-server-rs"
+          sudo install -m 0644 config/settings.example.json "$root/config/settings.json"
+          sudo install -m 0644 config/systemd/kittentts-server-rs.service "/etc/systemd/system/$unit"
+          sudo cp -a "$KITTENTTS_SERVER_MODEL_DIR/." "$root/models/nano/"
+          sudo cp "$RUNNER_TEMP"/onnxruntime-extracted/onnxruntime/capi/libonnxruntime*.so* \
+            "$root/lib/onnxruntime/$ORT_VERSION/"
+          sudo chown -R kittentts-server:kittentts-server "$root"
+          sudo chmod -R a+rX "$root/models/nano" "$root/lib/onnxruntime"
+          printf 'ORT_DYLIB_PATH=%s\nKITTENTTS_SERVER_MODEL_DIR=%s\n' \
+            "$root/lib/onnxruntime/$ORT_VERSION/libonnxruntime.so.$ORT_VERSION" \
+            "$root/models/nano" | sudo tee /etc/default/kittentts-server-rs >/dev/null
+          sudo systemctl daemon-reload
+          sudo systemctl start "$unit"
+          ready=0
+          for attempt in $(seq 1 120); do
+            sudo systemctl is-active --quiet "$unit" || { sudo journalctl -u "$unit" -n 100 --no-pager; exit 1; }
+            if curl -fsS http://127.0.0.1:8008/healthz 2>/dev/null \
+              | python3 -c 'import json,sys; assert json.load(sys.stdin)["model_loaded"] is True' 2>/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1 || { sudo journalctl -u "$unit" -n 100 --no-pager; exit 1; }
+          python3 tests/benchmark_real_tts.py \
+            --url http://127.0.0.1:8008 --concurrency 1 --requests 2 \
+            --server-ref "$GITHUB_SHA" --backend-ref "$BACKEND_SHA" \
+            --model-ref "$MODEL_SHA" \
+            --output "$RUNNER_TEMP/systemd-tts-smoke.json"
+          # Exercise systemd restart/stop as separate lifecycle assertions.
+          sudo systemctl restart "$unit"
+          sudo systemctl is-active --quiet "$unit"
+          ready=0
+          for attempt in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:8008/healthz 2>/dev/null \
+              | python3 -c 'import json,sys; assert json.load(sys.stdin)["model_loaded"] is True' 2>/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1 || { sudo journalctl -u "$unit" -n 100 --no-pager; exit 1; }
+          sudo systemctl stop "$unit"
+          ! sudo systemctl is-active --quiet "$unit"
+          echo "PASS systemd install, real WAV audio, restart, health, and stop" \
+            >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload bounded test evidence (never model weights or synthesized audio)
         if: always()
         uses: actions/upload-artifact@v4
@@ -405,5 +481,7 @@ jobs:
             ${{ runner.temp }}/benchmark-server.log
             ${{ runner.temp }}/docker-tts-smoke.json
             ${{ runner.temp }}/docker-server.log
+            ${{ runner.temp }}/systemd-tts-smoke.json
+            ${{ runner.temp }}/systemd-journal.log
           if-no-files-found: warn
           retention-days: 7
