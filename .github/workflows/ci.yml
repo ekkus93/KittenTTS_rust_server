@@ -494,7 +494,6 @@ jobs:
   # imply the Python implementation is available or compatible.
   python_reference_probe:
     if: (github.event_name == 'workflow_dispatch' && inputs.probe_python_reference == true) || (github.event_name == 'push' && github.ref == 'refs/heads/master' && contains(github.event.head_commit.message, '[probe-python-reference]'))
-    needs: validate
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
