@@ -105,7 +105,7 @@ jobs:
         run: cargo test --all-features
 
       - name: Validate opt-in Python harness syntax
-        run: python3 -m py_compile tests/live_backend_smoke.py tests/compare_python_rust.py tests/benchmark_real_tts.py
+        run: python3 -m py_compile tests/live_backend_smoke.py tests/compare_python_rust.py tests/benchmark_real_tts.py tests/run_python_parity.py
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -504,64 +504,18 @@ jobs:
           echo "Python reference=0e49fd2ae1baa3f2c9b007c12a962b5d99bb55c7" \
             >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Run actual Python-versus-Rust HTTP compatibility matrix (optional)
+      - name: Run Python-versus-Rust parity in default, authenticated, and strict modes
         if: inputs.run_python_parity == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-python-parity]'))
-        env:
-          KITTENTTS_SERVER_AUTH_ENABLED: "false"
-          KITTENTTS_SERVER_STRICT_MODE: "false"
-          KITTENTTS_SERVER_VOICE_MAP: '{"Narrator":"Jasper"}'
         run: |
           set -euo pipefail
-          python_port=18080
-          rust_port=18081
-          (
-            cd python-reference
-            export KITTENTTS_SERVER_HOST=127.0.0.1
-            export KITTENTTS_SERVER_PORT="$python_port"
-            exec "$RUNNER_TEMP/python-reference-venv/bin/python" \
-              -m uvicorn app.main:app --host 127.0.0.1 --port "$python_port" --no-server-header
-          ) > "$RUNNER_TEMP/python-parity-server.log" 2>&1 &
-          python_pid=$!
-          (
-            export KITTENTTS_SERVER_HOST=127.0.0.1
-            export KITTENTTS_SERVER_PORT="$rust_port"
-            exec ./dist/kittentts-server-rs
-          ) > "$RUNNER_TEMP/rust-parity-server.log" 2>&1 &
-          rust_pid=$!
-          cleanup() {
-            kill "$python_pid" "$rust_pid" 2>/dev/null || true
-            wait "$python_pid" "$rust_pid" 2>/dev/null || true
-          }
-          trap cleanup EXIT
-          for entry in "python:$python_port:$python_pid" "rust:$rust_port:$rust_pid"; do
-            IFS=: read -r label port pid <<< "$entry"
-            ready=0
-            for attempt in $(seq 1 150); do
-              kill -0 "$pid" 2>/dev/null || {
-                echo "$label server exited before readiness"
-                tail -n 70 "$RUNNER_TEMP/$label-parity-server.log"
-                exit 1
-              }
-              if curl -fsS "http://127.0.0.1:$port/healthz" 2>/dev/null \
-                | python3 -c 'import json,sys; assert json.load(sys.stdin)["model_loaded"] is True' 2>/dev/null; then
-                ready=1
-                break
-              fi
-              sleep 2
-            done
-            test "$ready" = 1 || {
-              echo "$label model-backed readiness timed out"
-              tail -n 70 "$RUNNER_TEMP/$label-parity-server.log"
-              exit 1
-            }
-          done
-          python3 tests/compare_python_rust.py \
-            --python-url "http://127.0.0.1:$python_port" \
-            --rust-url "http://127.0.0.1:$rust_port" \
+          python3 tests/run_python_parity.py \
+            --python-dir python-reference \
+            --python-executable "$RUNNER_TEMP/python-reference-venv/bin/python" \
+            --rust-binary dist/kittentts-server-rs \
             --python-ref 0e49fd2ae1baa3f2c9b007c12a962b5d99bb55c7 \
             --rust-ref "$GITHUB_SHA" --backend-ref "$BACKEND_SHA" \
-            --model-ref "$MODEL_SHA" --timeout 180 \
-            --output "$RUNNER_TEMP/parity-report.json"
+            --model-ref "$MODEL_SHA" \
+            --output-dir "$RUNNER_TEMP"
 
       - name: Upload bounded test evidence (never model weights or synthesized audio)
         if: always()
@@ -577,9 +531,8 @@ jobs:
             ${{ runner.temp }}/docker-server.log
             ${{ runner.temp }}/systemd-tts-smoke.json
             ${{ runner.temp }}/systemd-journal.log
-            ${{ runner.temp }}/parity-report.json
-            ${{ runner.temp }}/python-parity-server.log
-            ${{ runner.temp }}/rust-parity-server.log
+            ${{ runner.temp }}/parity-*.json
+            ${{ runner.temp }}/parity-*.log
             ${{ runner.temp }}/python-reference-freeze.txt
           if-no-files-found: warn
           retention-days: 7
