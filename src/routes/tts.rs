@@ -1306,7 +1306,10 @@ mod tests {
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let mut json_body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(json_body["error"]["request_id"].is_string());
-        json_body["error"].as_object_mut().unwrap().remove("request_id");
+        json_body["error"]
+            .as_object_mut()
+            .unwrap()
+            .remove("request_id");
         assert_eq!(
             json_body,
             json!({
