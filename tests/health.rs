@@ -475,7 +475,7 @@ async fn non_strict_stream_invalid_output_format_falls_back_to_wav() {
 }
 
 #[tokio::test]
-async fn strict_text_to_speech_invalid_output_format_returns_validation_error() {
+async fn strict_text_to_speech_invalid_output_format_matches_python_error() {
     let settings = Settings {
         strict_mode: true,
         ..Settings::default()
@@ -501,15 +501,14 @@ async fn strict_text_to_speech_invalid_output_format_returns_validation_error() 
 
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body_json: Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(body_json["error"]["code"], "validation_error");
-    assert!(body_json["error"]["message"]
-        .as_str()
-        .unwrap()
-        .contains("Unsupported output_format"));
+    assert_eq!(body_json["error"]["code"], "unsupported_output_format");
+    assert_eq!(body_json["error"]["message"], "Unsupported output_format: mp3");
+    assert_eq!(body_json["error"]["details"]["output_format"], "mp3");
+    assert!(body_json["error"]["request_id"].is_string());
 }
 
 #[tokio::test]
-async fn strict_stream_invalid_output_format_returns_validation_error() {
+async fn strict_stream_invalid_output_format_matches_python_error() {
     let settings = Settings {
         strict_mode: true,
         ..Settings::default()
@@ -535,9 +534,8 @@ async fn strict_stream_invalid_output_format_returns_validation_error() {
 
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body_json: Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(body_json["error"]["code"], "validation_error");
-    assert!(body_json["error"]["message"]
-        .as_str()
-        .unwrap()
-        .contains("Unsupported output_format"));
+    assert_eq!(body_json["error"]["code"], "unsupported_output_format");
+    assert_eq!(body_json["error"]["message"], "Unsupported output_format: mp3");
+    assert_eq!(body_json["error"]["details"]["output_format"], "mp3");
+    assert!(body_json["error"]["request_id"].is_string());
 }
