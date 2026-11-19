@@ -1342,10 +1342,8 @@ mod tests {
     #[tokio::test]
     async fn openai_domain_validation_retains_bad_request_and_missing_input() {
         let last_voice = Arc::new(Mutex::new(None));
-        let app = crate::routes::build_router(test_state(
-            crate::config::Settings::default(),
-            last_voice,
-        ));
+        let app =
+            crate::routes::build_router(test_state(crate::config::Settings::default(), last_voice));
 
         let response = app
             .oneshot(
