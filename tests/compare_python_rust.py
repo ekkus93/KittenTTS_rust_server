@@ -186,6 +186,14 @@ def main():
             record.update({"status": "BLOCKED", "reason": type(error).__name__ + ": " + str(error)})
         report["results"].append(record)
         print(record["status"], record["name"])
+        if record["status"] == "FAIL":
+            # The inputs are fixed local test fixtures, not user text or secrets.
+            # Emit bounded, field-level diagnostics for Ralph Bridge CI review.
+            print("  differences:", json.dumps(record["mismatches"], sort_keys=True)[:5000])
+            print("  Python response:", json.dumps(record["python"], sort_keys=True)[:5000])
+            print("  Rust response:", json.dumps(record["rust"], sort_keys=True)[:5000])
+        elif record["status"] == "BLOCKED":
+            print("  blocker:", record["reason"][:1000])
     with open(args.output, "w", encoding="utf-8") as fp:
         json.dump(report, fp, indent=2, sort_keys=True)
         fp.write("\n")
