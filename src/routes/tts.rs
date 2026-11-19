@@ -9,7 +9,7 @@ use futures_util::stream;
 use serde_json::Value;
 
 use crate::app_state::AppState;
-use crate::error::AppError;
+use crate::error::{AppError, AppErrorCode};
 use crate::middleware::request_context::{
     set_error_code, set_selected_voice, set_text_length, SharedRequestContext,
 };
@@ -108,8 +108,17 @@ where
 }
 
 fn parse_openai_request(payload: Value) -> Result<OpenAiSpeechRequest, AppError> {
-    serde_json::from_value(payload)
-        .map_err(|err| AppError::validation(format!("Invalid OpenAI speech request: {err}")))
+    // The Python/FastAPI compatibility target maps request-schema failures to
+    // HTTP 422 with a fixed public message. Keep Serde's internal diagnostics
+    // out of the client-visible envelope; valid requests still follow the
+    // existing domain-validation path (e.g. empty input is HTTP 400).
+    serde_json::from_value(payload).map_err(|_| {
+        AppError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            AppErrorCode::Validation,
+            "Request validation failed",
+        )
+    })
 }
 
 fn build_tts_response(
@@ -1314,12 +1323,54 @@ mod tests {
             .await
             .unwrap();
 
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(response.headers().contains_key("X-Request-Id"));
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            body_json,
+            json!({
+                "error": {
+                    "code": "validation_error",
+                    "message": "Request validation failed",
+                    "type": "invalid_request_error"
+                }
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn openai_domain_validation_retains_bad_request_and_missing_input() {
+        let last_voice = Arc::new(Mutex::new(None));
+        let app = crate::routes::build_router(test_state(
+            crate::config::Settings::default(),
+            last_voice,
+        ));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/audio/speech")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "model": "tts-1",
+                            "voice": "Jasper",
+                            "input": "  "
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let body_text = String::from_utf8(body.to_vec()).unwrap();
-        assert!(body_text.starts_with('{'), "unexpected body: {body_text}");
-        let body_json: serde_json::Value = serde_json::from_str(&body_text).unwrap();
-        assert!(body_json.get("error").is_some());
-        assert_eq!(body_json["error"]["type"], "validation_error");
+        let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(parsed["error"]["code"], "missing_input");
+        assert_eq!(parsed["error"]["type"], "missing_input");
+        assert_eq!(parsed["error"]["message"], "input is required");
     }
 }

@@ -138,11 +138,20 @@ impl AppError {
     }
 
     pub fn into_openai_envelope(&self) -> OpenAiErrorEnvelope {
+        // Python/FastAPI request-schema errors use "invalid_request_error"
+        // even though their stable code remains "validation_error".
+        let error_type = if self.status == StatusCode::UNPROCESSABLE_ENTITY
+            && self.code == AppErrorCode::Validation
+        {
+            "invalid_request_error"
+        } else {
+            self.code.as_str()
+        };
         OpenAiErrorEnvelope {
             error: OpenAiErrorBody {
                 code: Some(self.code.as_str().to_string()),
                 message: self.message.clone(),
-                error_type: self.code.as_str().to_string(),
+                error_type: error_type.to_string(),
             },
         }
     }
@@ -188,5 +197,22 @@ mod tests {
         assert_eq!(envelope.error.code.as_deref(), Some("missing_input"));
         assert_eq!(envelope.error.message, "input is required");
         assert_eq!(envelope.error.error_type, "missing_input");
+    }
+
+    #[test]
+    fn openai_request_schema_error_matches_python_envelope_without_affecting_domain_errors() {
+        let error = AppError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            AppErrorCode::Validation,
+            "Request validation failed",
+        );
+        let envelope = error.into_openai_envelope();
+
+        assert_eq!(envelope.error.code.as_deref(), Some("validation_error"));
+        assert_eq!(envelope.error.error_type, "invalid_request_error");
+        assert_eq!(envelope.error.message, "Request validation failed");
+
+        let domain = AppError::validation("domain validation").into_openai_envelope();
+        assert_eq!(domain.error.error_type, "validation_error");
     }
 }
