@@ -40,7 +40,7 @@
 - [x] **A3.1** Review backend checkout nondeterminism and propose a pinned backend-revision strategy; seek required CI-policy approval **before** any workflow changes.
 - [x] **A3.2** Smoke-test a fresh release binary on Linux with required runtime dependencies, or record the exact environment blocker.
 - [x] **A3.3** Smoke-test container startup, `/healthz`, real-backend availability, and shutdown if CI resources allow; do not mislabel Docker build-only as runtime coverage.
-- [ ] **A3.4** Validate documented systemd installation in an appropriate host/VM, or mark as **not yet verified** with a reproducible procedure.
+- [x] **A3.4** Validate documented systemd installation in an appropriate host/VM, or mark as **not yet verified** with a reproducible procedure.
 - [x] **A3.5** Record pass/fail/blocker per deployment variant in evidence ledger.
 
 **A acceptance:** exact-current-HEAD validation is green with a reproducible server/backend/environment provenance; release build and deployment outcomes are reported without overstating coverage.

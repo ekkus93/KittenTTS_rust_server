@@ -25,6 +25,10 @@ on:
         description: "Install and exercise the real model through systemd (requires run_real_model)"
         type: boolean
         default: false
+      probe_python_reference:
+        description: "Discover exact Python reference repo commit and runtime metadata"
+        type: boolean
+        default: false
       model_revision:
         description: "Exact Hugging Face model commit SHA or main (resolved per run)"
         type: string
@@ -485,3 +489,91 @@ jobs:
             ${{ runner.temp }}/systemd-journal.log
           if-no-files-found: warn
           retention-days: 7
+
+  # Separate from Rust validation and actual parity; discovery does not
+  # imply the Python implementation is available or compatible.
+  python_reference_probe:
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe_python_reference == true) || (github.event_name == 'push' && github.ref == 'refs/heads/master' && contains(github.event.head_commit.message, '[probe-python-reference]'))
+    needs: validate
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - name: Resolve reference repository and exact default-branch revision
+        run: |
+          set -euo pipefail
+          url="https://github.com/ekkus93/KittenTTS_server.git"
+          # No secrets, cross-repository write token, or credential helper.
+          git -c credential.helper= clone --depth 1 --filter=blob:none "$url" reference
+          sha="$(git -C reference rev-parse HEAD)"
+          branch="$(git -C reference branch --show-current)"
+          [[ "$sha" =~ ^[a-fA-F0-9]{40}$ ]] || exit 1
+          echo "Python reference SHA: $sha (branch: $branch)"
+          echo "python_reference=ekkus93/KittenTTS_server" >> "$GITHUB_STEP_SUMMARY"
+          echo "python_ref=$sha" >> "$GITHUB_STEP_SUMMARY"
+          echo "python_branch=$branch" >> "$GITHUB_STEP_SUMMARY"
+          echo "PYTHON_REFERENCE_SHA=$sha" >> "$GITHUB_ENV"
+          echo "PYTHON_REFERENCE_BRANCH=$branch" >> "$GITHUB_ENV"
+
+      - name: Inspect package, entrypoint, and API surface without executing source
+        run: |
+          python3 - <<'PY'
+          import ast
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path("reference")
+          result = {
+              "repository": "ekkus93/KittenTTS_server",
+              "sha": os.environ["PYTHON_REFERENCE_SHA"],
+              "branch": os.environ["PYTHON_REFERENCE_BRANCH"],
+              "files": sorted(str(p.relative_to(root)) for p in root.glob("*") if p.is_file()),
+              "python_modules": {},
+              "dependencies": {},
+              "documented_commands": [],
+          }
+          for path in sorted((root / "app").glob("*.py")):
+              parsed = ast.parse(path.read_text(encoding="utf-8"))
+              exports = [node.name for node in parsed.body
+                         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+              imports = []
+              for node in parsed.body:
+                  if isinstance(node, ast.Import):
+                      imports += [x.name for x in node.names]
+                  elif isinstance(node, ast.ImportFrom) and node.module:
+                      imports.append(node.module)
+              result["python_modules"][str(path.relative_to(root))] = {
+                  "exports": exports[:50], "imports": sorted(set(imports))[:50]
+              }
+          for name in ("requirements.txt", "requirements-dev.txt", "pyproject.toml",
+                       "Pipfile", "environment.yml"):
+              path = root / name
+              if path.is_file():
+                  data = path.read_text(encoding="utf-8")
+                  result["dependencies"][name] = [
+                      line.strip()[:150] for line in data.splitlines()[:120]
+                      if line.strip() and not line.strip().startswith("#")
+                  ]
+          for name in ("README.md", "Dockerfile", "docker-compose.yml",
+                       "compose.yaml", "Makefile"):
+              path = root / name
+              if path.is_file():
+                  for raw in path.read_text(encoding="utf-8").splitlines():
+                      line = raw.strip()
+                      keywords = ("uvicorn", "gunicorn", "pip install", "python -m",
+                                  "requirements.txt", "docker compose", "CMD [")
+                      if any(key in line.lower() for key in keywords):
+                          result["documented_commands"].append({"file": name, "line": line[:220]})
+          dest = Path(os.environ["RUNNER_TEMP"]) / "python-reference-probe.json"
+          dest.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print("PYTHON REFERENCE METADATA (bounded, no raw source or model assets)")
+          print(json.dumps(result, indent=2)[:16000])
+          PY
+
+      - name: Upload Python reference metadata only
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-reference-probe-${{ github.sha }}
+          path: ${{ runner.temp }}/python-reference-probe.json
+          retention-days: 7
+          if-no-files-found: error
