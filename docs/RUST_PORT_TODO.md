@@ -448,7 +448,7 @@ This TODO is organized into phases, tasks, and subtasks so GitHub Copilot can wo
 
 ### 7.10 Acceptance for Phase 7
 - [x] All public routes exist
-- [ ] Routes behave compatibly enough to replace the Python server for current clients
+- [x] Routes behave compatibly enough to replace the Python server for current clients — accepted for the tested v1 contract by [2026-11-19 revalidation](REVALIDATION_EVIDENCE.md) (98/98 live Python-parity cases and real ONNX/Docker/systemd CI)
 
 ---
 

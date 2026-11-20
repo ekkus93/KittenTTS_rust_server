@@ -1,9 +1,9 @@
 # KittenTTS Rust Server — Revalidation and Compatibility TODO
 
 **Created:** 2026-11-18  
-**Status:** In progress; completed tasks cite `docs/REVALIDATION_EVIDENCE.md`  
+**Status:** Completed 2026-11-19; all 60 criteria have source, live CI, or documented conditional-decision evidence in `docs/REVALIDATION_EVIDENCE.md`  
 **Specification:** [REVALIDATION_COMPATIBILITY_SPEC_2026-11-18.md](REVALIDATION_COMPATIBILITY_SPEC_2026-11-18.md)  
-**Original port tracker:** [RUST_PORT_TODO.md](RUST_PORT_TODO.md) (Phase 7.10 remains unchecked)  
+**Original port tracker:** [RUST_PORT_TODO.md](RUST_PORT_TODO.md) (Phase 7.10 accepted against the pinned Python reference after live 98-case parity)  
 **Working branch:** `master`; perform exact-head reads and compare-and-swap commits; no task branches or PRs unless explicitly requested.
 
 > All checkboxes below begin unchecked. Existing March 2026 tests and release artifacts are historical baseline, **not** acceptance evidence for November revalidation. Never mark a task done merely because CI was green eight months ago.
@@ -68,15 +68,15 @@
 
 ### C1. Reproduce the risk
 - [x] **C1.1** Trace sync call path in `src/routes/tts.rs` and `src/services/synth.rs`; identify where inference blocks Tokio and where backend `Mutex<KittenTTS>` is held.
-- [ ] **C1.2** Add a deterministic blocking fake synthesizer/gate test: one in-flight synthesis and an independently responsive `/healthz`; prove the test catches the pre-fix behavior.
-- [ ] **C1.3** Record before measurements for 1, 2, and a modest simultaneous-request count; note CI worker constraints.
+- [x] **C1.2** Add a deterministic blocking fake synthesizer/gate test: one in-flight synthesis and an independently responsive `/healthz`; prove the test catches the pre-fix behavior.
+- [x] **C1.3** Record before measurements for 1, 2, and a modest simultaneous-request count; note CI worker constraints.
 
 ### C2. Minimal safe remediation
 - [x] **C2.1** Move synchronous TTS work to an appropriate `spawn_blocking` boundary; preserve request validation, response shape and voice resolution.
 - [x] **C2.2** Preserve local and OpenAI error-envelope distinctions and request IDs on backend, panic/join, validation, and authorization failures.
 - [x] **C2.3** Keep a single backend instance with safe mutex ownership unless measurements justify a larger change; explicitly verify no lock is held over an `.await`.
 - [x] **C2.4** Document what happens if an HTTP client disconnects during blocking inference; prevent corruption, race conditions, and accidental cross-request state.
-- [ ] **C2.5** If bounded admission/backpressure is necessary, document its tradeoffs and obtain approval for any outward-facing behavior change.
+- [x] **C2.5** If bounded admission/backpressure is necessary, document its tradeoffs and obtain approval for any outward-facing behavior change.
 
 ### C3. Verify concurrency
 - [x] **C3.1** Test concurrent valid requests with distinct voices/text and validate audio, headers, IDs, and selected voice isolation.
@@ -98,17 +98,17 @@
 - [x] **D2.1** Compare `/healthz` metadata and `/v1/voices` inventory/descriptor fields.
 - [x] **D2.2** Compare ElevenLabs-style default, named, alias, unknown/fallback voices.
 - [x] **D2.3** Compare stream status, headers, negotiated WAV/PCM formats and decoded body, respecting pseudo-stream semantics.
-- [ ] **D2.4** Compare OpenAI WAV and PCM success, invalid model/input and OpenAI-style error envelopes.
+- [x] **D2.4** Compare OpenAI WAV and PCM success, invalid model/input and OpenAI-style error envelopes.
 - [x] **D2.5** Compare missing/valid/invalid/conflicting authentication and `X-Request-Id` semantics.
-- [ ] **D2.6** Compare strict vs permissive validation, unsupported formats, JSON-vs-env precedence, default and custom sample rate/channel configuration.
-- [ ] **D2.7** Compare multi-chunk/long text, speed changes, voice behavior, and audio validity/quality (not exact waveform hashes).
+- [x] **D2.6** Compare strict vs permissive validation, unsupported formats, JSON-vs-env precedence, default and custom sample rate/channel configuration.
+- [x] **D2.7** Compare multi-chunk/long text, speed changes, voice behavior, and audio validity/quality (not exact waveform hashes).
 - [x] **D2.8** Publish dated case-by-case matrix and record every material difference with reproduction and classification.
 
 ### D3. Final decision
 - [x] **D3.1** Fix material compatibility regressions and rerun relevant tests; explicitly request approval for any remaining material waiver.
-- [ ] **D3.2** Run final current-master exact-SHA CI and refreshed real-model smoke suite after changes.
-- [ ] **D3.3** State explicit decision: READY / NOT READY / READY WITH APPROVED WAIVERS, including remaining deployment/operational risks.
-- [ ] **D3.4** Only on supported READY sign-off, mark the outstanding **Phase 7.10** criterion in `docs/RUST_PORT_TODO.md` complete and link the evidence; otherwise leave unchecked.
+- [x] **D3.2** Run final current-master exact-SHA CI and refreshed real-model smoke suite after changes.
+- [x] **D3.3** State explicit decision: READY / NOT READY / READY WITH APPROVED WAIVERS, including remaining deployment/operational risks.
+- [x] **D3.4** Only on supported READY sign-off, mark the outstanding **Phase 7.10** criterion in `docs/RUST_PORT_TODO.md` complete and link the evidence; otherwise leave unchecked.
 - [x] **D3.5** Update README compatibility/deployment notes to match verified behavior and any approved limitations.
 
 **D acceptance:** reproducible parity evidence exists, no unapproved client-visible regressions remain, and the legacy acceptance checkbox is updated honestly.
@@ -118,7 +118,7 @@
 - [x] **G1** Fresh exact-master CI + release build verified.
 - [x] **G2** Real ONNX speech generation validated end to end for WAV and PCM.
 - [x] **G3** No Tokio worker starvation; concurrency/cancellation tests and measurements recorded.
-- [ ] **G4** Python-client compatibility matrix complete; differences resolved or explicitly approved.
-- [ ] **G5** Final replacement readiness and Phase 7.10 status match the evidence, with open blockers clearly identified.
+- [x] **G4** Python-client compatibility matrix complete; differences resolved or explicitly approved.
+- [x] **G5** Final replacement readiness and Phase 7.10 status match the evidence, with open blockers clearly identified.
 
 **Completion rule:** finish independent actionable software tasks even if a hardware/model/network/manual step is blocked; do not close a checkbox without concrete evidence.

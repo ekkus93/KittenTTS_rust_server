@@ -188,3 +188,51 @@ Evidence refers to **specific source commits and runs**, not a blanket statement
 - D2.6: custom sample rate/channel and config JSON-vs-env precedence have not yet been compared. Strict extra-field behavior **was** compared.
 - D2.7: the long-text and speed scenarios passed, but no explicit multi-chunk boundary/subjective audio-quality evaluation has been performed.
 - D3.2–D3.4, G4–G5 and original Phase 7.10: **remain open** pending fuller compatibility and explicit sign-off. There is no claim of production-cutover readiness solely from run #53.
+
+
+## 2026-11-19 — Extended parity, historical before/after measurements, and v1 replacement decision
+
+### Expanded measured Python HTTP parity: PASS (D2.4, D2.6, D2.7, G4)
+
+- Python reference unchanged: `ekkus93/KittenTTS_server@0e49fd2ae1baa3f2c9b007c12a962b5d99bb55c7`; Rust server source at `5f7c450431e0cca5bdba3110a4a7d570e0f1fae9` with reviewed backend `df7718161bc68c8b13bea85e879308becf12e87b`, pinned FP32 model `e73cfb095bd949c786ccdcf3b8ab04eb36c47442`, ONNX Runtime 1.24.2 and GitHub-hosted Ubuntu 26.04 x86_64.
+- [GitHub Actions run #56](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44641291861): **PASS** formatting, real-backend feature check, strict Clippy, 136 Rust unit/integration tests (verify precise per-suite counts in log), optimized release build, actual ONNX HTTP smoke and all five independently launched Python/Rust modes.
+- `tests/run_python_parity.py` launches fresh source-pinned Python and compiled Rust services with matching settings in each mode; validates `model_loaded=true` for both before calling `tests/compare_python_rust.py`. Cases cover routes, WAV/PCM metadata and signal, voices and fallback/aliases, pseudo-streaming, both OpenAI formats, invalid models/missing and empty input, strict/permissive validation, known/invalid/conflicting auth and Bearer credentials, long/multi-chunk text, speed, custom sample rate/channels and an explicit 22.05 kHz stereo **JSON-over-env override**. Both implementations must produce compatible status, normalized JSON/error envelopes, key headers and valid audio; transient request IDs and diagnostic/transport fields are recorded separately.
+- Verified mode-level aggregates (each `PASS/FAIL/BLOCKED`):
+
+| Mode | PASS | FAIL | BLOCKED |
+| --- | ---: | ---: | ---: |
+| Default (24 kHz mono) | 18 | 0 | 0 |
+| Auth enabled (valid and invalid credentials) | 24 | 0 | 0 |
+| Strict mode | 20 | 0 | 0 |
+| 22.05 kHz stereo via env | 18 | 0 | 0 |
+| 22.05 kHz stereo via JSON-over-env precedence | 18 | 0 | 0 |
+| **Total** | **98** | **0** | **0** |
+
+- The five case-by-case JSON matrices (`parity-default.json`, `parity-authenticated.json`, `parity-strict.json`, `parity-stereo_22050.json`, `parity-json_precedence.json`) and bounded process diagnostics were uploaded in the run #56 evidence artifact; neither model weights nor generated audio recordings were uploaded. More detailed individual case names and response differences are available in those per-case artifacts. Known diagnostic `engine`/ORT metadata and pseudo-stream framing differences are normalized or observational, **not** hidden source regressions.
+- New material mismatch discovered by [run #55](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44636636136): each of the five modes returned a Python OpenAI `missing_input` error with `type="invalid_request_error"` while Rust emitted `type="missing_input"`. Corrected the **OpenAI envelope only** in `src/error.rs`, preserving the `missing_input` error code, HTTP 400 status and non-OpenAI local errors. New assertions in `src/routes/tts.rs` verified via run #56. This is a resolved compatibility defect, not a waived difference.
+- **Audio quality scope:** real WAV/PCM samples are non-silent, finite, non-empty, container/headers/channel/sample rate correct; invalid output and truncation are rejected. Perceptual quality/voice identity was not human-listened and no exact waveform hashes were demanded or asserted. This is a structural/signal sanity check for the pinned supported v1 contract, not subjective speech-quality certification.
+
+### Pre-fix scheduler proof and same-run live-model 1/2/4 baseline (C1.2, C1.3)
+
+- [Run #57](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44642761064) at `8f669939ca7e3ec064d65352c57e9562c26d8ae8`: **PASS** current source formatting, Clippy, real-feature build, complete Rust test suite, current optimized release and live model smoke. `inline_legacy_synthesis_negative_control_starves_one_tokio_worker` places the **old synchronous call shape** into one Tokio worker with a controlled Condvar-gated fake synthesizer; health cannot advance until release, then recovers. The adjacent `blocking_synthesis_does_not_starve_single_tokio_worker` executes the live route via `spawn_blocking` and verifies health, invalid-input and auth responsiveness *before* releasing synthesis. These deterministic complementary tests show that the test checks the actual starvation mechanism; the negative control itself **does not execute a historical source SHA**.
+- The same run checked out historical pre-fix server `fd2d0e40771bfea765976ff9ae22969ecd63700c`, built its actual real-backend binary with pinned backend `df7718161bc68c8b13bea85e879308becf12e87b` and Rust 1.100.0, loaded the same FP32 model/ORT library, and ran `tests/benchmark_real_tts.py` from the current repo against both old and current servers on one GitHub-hosted Ubuntu 26.04 x86_64 runner. Tested **8 requests per concurrency 1/2/4 on each binary (24/24 successful per version)**; numbers are observed CI statistics, not production SLOs. CPU count and sampled RSS are embedded in each run's JSON benchmark report artifact, not re-read in this bridge session.
+
+| Clients | Old wall s | Old p50 s | Old p95 s | New wall s | New p50 s | New p95 s |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 2.66 | 0.3335 | 0.3503 | 2.64 | 0.3322 | 0.3481 |
+| 2 | 2.84 | 0.6792 | 0.8415 | 2.81 | 0.6555 | 0.8424 |
+| 4 | 2.60 | 1.2830 | 1.3029 | 2.64 | 1.2911 | 1.3211 |
+
+- Baseline/new results support **the correctness of moving synchronous inference away from Tokio worker threads**, not an increased backend parallelism/throughput claim. Current server continues to serialize model inference. Under this bounded 1/2/4-client, eight-requests-per-level load, the suite observed no failures or evidence establishing that admission/backpressure is necessary.
+- **C2.5 decision (conditional):** **Do not introduce an outward-facing request cap/backpressure policy now.** New limits could change compatibility for existing clients, while measurements show no immediate need at tested load. Tradeoff: without an admission limit, an extreme unmeasured burst can queue more `spawn_blocking` tasks and increase latency/RSS; monitor request concurrency, queue latency and memory under realistic production traffic. If limits become necessary, document API-visible rejection semantics and obtain explicit approval before adding them. No such externally observable change is made in this loop.
+
+### Explicit replacement-readiness decision (D3.2–D3.4, G5)
+
+**Decision: READY for the tested v1 Python `KittenTTS_server` API contract, with zero material compatibility waivers.**
+
+- Routes, error envelopes, voice selection, auth, strict/permissive validation, default and alternative audio settings, streaming container format, configuration precedence and multi-chunk scenarios passed **98/98** live, pinned Python-vs-Rust cases on run #56. Remaining observed differences are engine-specific diagnostics, HTTP transfer framing, latency and non-identical valid waveform bytes; these are outside the normalized behavior required for current supported clients. Any client depending on those raw diagnostic or byte-level details requires separate testing.
+- Same-model inference and worker-starvation behavior tested on run #57, including actual older source benchmark; no rise in single-model throughput assumed. Docker live container and Linux systemd service with real synthesized WAV have independently passed [runs #38](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44422566763) and [#39](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44494955365).
+- **Operational limitations:** actual deployment still requires model/voices files, `espeak-ng` and the appropriate pinned ONNX Runtime native libraries; only tested GitHub-hosted x86_64 Ubuntu environments have been verified for deployment. Pseudo-streaming is not true incremental synthesis. Backend is single-instance/mutex-serialized, so busy-period latency rises with concurrent clients. No subjective voice MOS listening, high-scale SLO test, production traffic cutover, or unsupported format guarantee is implied. Model/version drift must be revalidated.
+- **D3.2 evidence:** [run #56](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44641291861) is the latest live five-mode Python parity, and [run #57](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44642761064) is the last source-change exact-head green run with refreshed real speech and before/after benchmark. The subsequent acceptance/doc-only HEAD is sent through exact-head live CI again by an explicit `[run-real-model] [run-python-parity]` commit marker. **Do not infer its CI result until observed.**
+- Since all mandatory tested cases pass, no material regression waiver is sought; accordingly the original `docs/RUST_PORT_TODO.md` Phase 7.10 compatibility-for-current-clients checkbox is **checked** and cross-linked to this decision. This is an engineering sign-off for migration planning, **not** automatic authorization to change user infrastructure or cut over production.
+- All 60 follow-up TODO boxes are closed with these dated technical results or explicit conditional C2.5 decision; keep future traffic testing, manual listening, and model/toolchain updates separate from this finite acceptance program.

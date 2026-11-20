@@ -141,9 +141,39 @@ The reproducible CI inputs are Ubuntu 26.04, Rust 1.100.0, backend commit
 `e73cfb095bd949c786ccdcf3b8ab04eb36c47442`. Actual model-backed
 WAV/PCM synthesis and auth passed on
 [run #34](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44419962792).
-The separate Python-server parity and Docker/systemd runtime acceptance
-checks remain incomplete; a green model smoke test does **not** establish
-Python drop-in compatibility.
+Subsequent revalidation **verified** the Python-server parity and actual
+Docker/systemd lifecycles. The Rust server is **READY for the tested v1 Python
+API contract**, not certified for untested client behavior or high-scale
+production load. The pinned Python reference is `ekkus93/KittenTTS_server`
+at `0e49fd2ae1baa3f2c9b007c12a962b5d99bb55c7`. Actual ONNX speech,
+WAV/PCM, error envelopes, voice handling, auth, strict validation,
+22.05 kHz stereo, long/multi-chunk text and JSON-over-environment precedence
+were compared in [run #56](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44641291861):
+**98 PASS, 0 FAIL, 0 BLOCKED** across five configurations. The original March
+pre-fix binary and the current server were benchmarked 1/2/4 clients against
+the same model and backend in
+[run #57](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44642761064)
+(24/24 valid real requests per version; no material single-model throughput
+speedup claimed). Actual
+[Docker](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44422566763)
+and [systemd](https://github.com/ekkus93/KittenTTS_rust_server/actions/runs/44494955365)
+model-backed tests passed. The original port's Phase 7.10 replacement criterion
+is accepted in `docs/RUST_PORT_TODO.md` with the
+[dated evidence matrix](docs/REVALIDATION_EVIDENCE.md).
+
+**Operational limits:** the HTTP `/stream` routes remain pseudo-streaming,
+a mutex still serializes inference through one model instance, and
+`spawn_blocking` improves other request responsiveness rather than model
+throughput. Container/systemd were exercised on GitHub-hosted Ubuntu
+x86_64, not every customer OS or physical host. A deployment still requires
+compatible pinned model assets, `espeak-ng`, and ONNX Runtime 1.24.2.
+Per-request audio bytes, engine diagnostic metadata and transfer-encoding
+details are not promised identical across Python/Rust; they were classified
+as harmless platform/diagnostic variation in the observed API matrix,
+not granted waivers for material client-visible regressions. Monitor queue
+latency/memory on production-sized workloads before introducing admission
+limits or changing API behavior. Production cutover itself has **not**
+been performed by these tests.
 
 ### Side-by-side Python compatibility comparator
 
