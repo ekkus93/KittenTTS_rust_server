@@ -467,6 +467,95 @@ mod tests {
     }
 
     #[test]
+    fn inline_legacy_synthesis_negative_control_starves_one_tokio_worker() {
+        use std::sync::{mpsc, Condvar};
+        use std::time::Duration;
+
+        // Faithfully model the pre-fix call shape: a synchronous synthesizer
+        // invoked directly inside an async handler, without spawn_blocking.
+        // This is a negative control for the adjacent positive gated-route
+        // regression; it does not claim to execute the historical Git SHA.
+        struct LegacyGatedSynth {
+            entered: mpsc::Sender<()>,
+            released: Arc<(Mutex<bool>, Condvar)>,
+        }
+
+        impl Synthesizer for LegacyGatedSynth {
+            fn list_voices(&self) -> Vec<String> {
+                vec!["Jasper".to_string()]
+            }
+
+            fn synthesize(
+                &self,
+                request: &InternalSynthesisRequest,
+            ) -> Result<SynthResult, AppError> {
+                self.entered.send(()).expect("start observation");
+                let (lock, condvar) = &*self.released;
+                let mut ready = lock.lock().expect("not poisoned");
+                while !*ready {
+                    ready = condvar.wait(ready).expect("not poisoned");
+                }
+                Ok(SynthResult {
+                    audio: FloatAudioBuffer {
+                        waveform: vec![0.0, 0.25, -0.25],
+                        sample_rate: 24_000,
+                        channels: 1,
+                    },
+                    voice: request.voice_id.clone().unwrap_or_default(),
+                })
+            }
+        }
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("single worker runtime");
+        let (started_tx, started_rx) = mpsc::channel();
+        let released = Arc::new((Mutex::new(false), Condvar::new()));
+        let fake = test_runtime(LegacyGatedSynth {
+            entered: started_tx,
+            released: Arc::clone(&released),
+        })
+        .synthesizer();
+        runtime.spawn(async move {
+            // This line is intentionally inline/blocking to demonstrate the
+            // failure the production route must never reintroduce.
+            let result = fake.synthesize(&InternalSynthesisRequest {
+                text: "legacy blocking inference".to_string(),
+                voice_id: Some("Jasper".to_string()),
+                model_id: None,
+                speed: 1.0,
+                output_format: None,
+                streaming: false,
+            });
+            assert!(result.is_ok());
+        });
+
+        started_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("inline synthesis entered the gate");
+        let (health_tx, health_rx) = mpsc::channel();
+        runtime.spawn(async move {
+            let _ = health_tx.send(());
+        });
+        let was_starved = health_rx.recv_timeout(Duration::from_millis(100)).is_err();
+
+        // Always release before asserting so test failures cannot deadlock
+        // shutdown of this runtime or leak the worker thread.
+        let (lock, condvar) = &*released;
+        *lock.lock().expect("not poisoned") = true;
+        condvar.notify_all();
+        let healthy_after_release = health_rx.recv_timeout(Duration::from_secs(5));
+
+        assert!(was_starved, "inline synthesis unexpectedly yielded worker");
+        assert!(
+            healthy_after_release.is_ok(),
+            "the worker did not recover after inference released"
+        );
+    }
+
+    #[test]
     fn blocking_synthesis_does_not_starve_single_tokio_worker() {
         use std::sync::{mpsc, Condvar};
         use std::time::Duration;

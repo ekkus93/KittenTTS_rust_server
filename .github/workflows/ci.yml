@@ -17,6 +17,10 @@ on:
         description: "Benchmark real-model inference (requires run_real_model)"
         type: boolean
         default: false
+      run_baseline:
+        description: "Build pre-fix March server and record old 1/2/4 request baseline"
+        type: boolean
+        default: false
       run_docker:
         description: "Build and smoke-test the Docker image (requires run_real_model)"
         type: boolean
@@ -367,6 +371,71 @@ jobs:
             --backend-ref "$BACKEND_SHA" --model-ref "$MODEL_SHA" \
             --output "$RUNNER_TEMP/real-tts-benchmark.json"
 
+      # Baseline is an explicitly requested test-only build. It is NOT shipped
+      # as an artifact and cannot overwrite the validated current release.
+      - name: Checkout March pre-fix server source (optional baseline)
+        if: inputs.run_baseline == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-baseline]'))
+        uses: actions/checkout@v4
+        with:
+          ref: fd2d0e40771bfea765976ff9ae22969ecd63700c
+          path: baseline-server
+
+      - name: Checkout same pinned backend for historical comparison
+        if: inputs.run_baseline == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-baseline]'))
+        uses: actions/checkout@v4
+        with:
+          repository: ekkus93/kitten_tts_rs
+          ref: df7718161bc68c8b13bea85e879308becf12e87b
+          path: kitten_tts_rs
+
+      - name: Install pinned Rust toolchain for historical comparison
+        if: inputs.run_baseline == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-baseline]'))
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.100.0"
+
+      - name: Build historical pre-fix real-backend server
+        if: inputs.run_baseline == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-baseline]'))
+        run: |
+          set -euo pipefail
+          test "$(git -C baseline-server rev-parse HEAD)" = fd2d0e40771bfea765976ff9ae22969ecd63700c
+          test "$(git -C kitten_tts_rs rev-parse HEAD)" = "$BACKEND_SHA"
+          (cd baseline-server && cargo build --release --locked --features real-backend)
+          test -x baseline-server/target/release/kittentts-server-rs
+
+      - name: Benchmark historical pre-fix server at 1, 2 and 4 clients
+        if: inputs.run_baseline == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-baseline]'))
+        env:
+          KITTENTTS_SERVER_HOST: "127.0.0.1"
+          KITTENTTS_SERVER_PORT: "18082"
+          KITTENTTS_SERVER_AUTH_ENABLED: "false"
+        run: |
+          set -euo pipefail
+          (
+            cd baseline-server
+            exec ./target/release/kittentts-server-rs
+          ) > "$RUNNER_TEMP/baseline-server.log" 2>&1 &
+          baseline_pid=$!
+          trap 'kill "$baseline_pid" 2>/dev/null || true; wait "$baseline_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 150); do
+            kill -0 "$baseline_pid" || { tail -n 80 "$RUNNER_TEMP/baseline-server.log"; exit 1; }
+            if curl -fsS "http://127.0.0.1:18082/healthz" 2>/dev/null \
+              | python3 -c 'import json,sys; assert json.load(sys.stdin)["model_loaded"] is True' 2>/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1 || { tail -n 80 "$RUNNER_TEMP/baseline-server.log"; exit 1; }
+          python3 tests/benchmark_real_tts.py \
+            --url http://127.0.0.1:18082 --requests 8 --concurrency 1 2 4 \
+            --pid "$baseline_pid" --timeout 180 \
+            --server-ref fd2d0e40771bfea765976ff9ae22969ecd63700c \
+            --backend-ref "$BACKEND_SHA" --model-ref "$MODEL_SHA" \
+            --output "$RUNNER_TEMP/real-tts-prefx-baseline.json"
+          echo "Historical server benchmark completed against pinned model/backend" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Check out reviewed backend for container build (optional)
         if: inputs.run_docker == true || (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-docker]'))
         uses: actions/checkout@v4
@@ -527,6 +596,8 @@ jobs:
             ${{ runner.temp }}/onnxruntime.sha256
             ${{ runner.temp }}/real-tts-benchmark.json
             ${{ runner.temp }}/benchmark-server.log
+            ${{ runner.temp }}/real-tts-prefx-baseline.json
+            ${{ runner.temp }}/baseline-server.log
             ${{ runner.temp }}/docker-tts-smoke.json
             ${{ runner.temp }}/docker-server.log
             ${{ runner.temp }}/systemd-tts-smoke.json
